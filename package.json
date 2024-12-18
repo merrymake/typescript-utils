@@ -1,0 +1,17 @@
+{
+  "name": "@merrymake/utils",
+  "version": "1.0.0",
+  "description": "This is just a bag of nice little functions that we use often.",
+  "type": "module",
+  "main": "./index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@tsconfig/node-lts": "latest",
+    "@types/node": "latest"
+  }
+}
