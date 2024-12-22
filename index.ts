@@ -132,7 +132,9 @@ export function print(str: string, prefix: string = "") {
   );
 }
 
-export function typedKeys<T extends object>(o: T): Array<keyof T> {
+export function typedKeys<T extends Record<string, unknown>>(
+  o: T
+): Array<keyof T & string> {
   return Object.keys(o) as any;
 }
 

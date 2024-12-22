@@ -12,3 +12,5 @@ const o = { a: "hello", b: "hi" };
 typedKeys(o).forEach((k) => o[k]);
 const oi = mapObject(o, (s) => s.length);
 toObject(typedKeys(o), (k) => o[k]);
+const s = { a: "hello", b: "hi" };
+typedKeys(s).forEach((k) => k.substring(0));
