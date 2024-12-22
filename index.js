@@ -92,3 +92,40 @@ export class Timer {
         process.stdout.write("\n");
     }
 }
+export function Promise_all(arr) {
+    return Promise.all(arr);
+}
+export function sleep(ms) {
+    return new Promise((resolve) => {
+        setTimeout(() => resolve(), ms);
+    });
+}
+export function print(str, prefix = "") {
+    const prefixLength = prefix.length;
+    process.stdout.write(prefix +
+        str
+            .trimEnd()
+            .split("\n")
+            .flatMap((x) => (x.match(new RegExp(`.{1,${process.stdout.getWindowSize()[0] - prefixLength}}( |$)|.{1,${process.stdout.getWindowSize()[0] - prefixLength}}`, "g")) || []).map((x) => x.trimEnd()))
+            .join(`\n${prefix}`) +
+        "\n");
+}
+export function typedKeys(o) {
+    return Object.keys(o);
+}
+export function mapObject(o, f) {
+    const res = {};
+    typedKeys(o).forEach((k) => (res[k] = f(o[k])));
+    return res;
+}
+export function partition(arr, f) {
+    const yes = [];
+    const no = [];
+    arr.forEach((t) => (f(t) ? yes.push(t) : no.push(t)));
+    return { yes, no };
+}
+export function toObject(keys, val) {
+    const result = {};
+    keys.forEach((k) => (result[k] = val(k)));
+    return result;
+}

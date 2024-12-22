@@ -151,3 +151,12 @@ export function partition<T>(arr: T[], f: (_: T) => boolean) {
   arr.forEach((t) => (f(t) ? yes.push(t) : no.push(t)));
   return { yes, no };
 }
+
+export function toObject<K extends string[], T>(
+  keys: K,
+  val: (k: K[number]) => T
+) {
+  const result: { [key: string]: T } = {};
+  keys.forEach((k) => (result[k] = val(k)));
+  return result as { [key in K[number]]: T };
+}
