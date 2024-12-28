@@ -60,7 +60,7 @@ export function durationString(duration_ms) {
         duration /= units[i][0];
         unit = units[i][1];
     }
-    return duration.toFixed(1) + unit;
+    return unit !== "ms" ? duration.toFixed(1) + unit : duration + unit;
 }
 /**
  * Small console timer, for when you cannot move the cursor. It prints a . every second, every 5 seconds it prints a !, and every 10 it prints the next digit.
@@ -100,8 +100,7 @@ export function sleep(ms) {
         setTimeout(() => resolve(), ms);
     });
 }
-export function print(str, prefix = "") {
-    const prefixLength = prefix.length;
+export function print(str, prefix = "", prefixLength = prefix.length) {
     process.stdout.write(prefix +
         str
             .trimEnd()

@@ -62,7 +62,7 @@ export function durationString(duration_ms: number) {
     duration /= units[i][0];
     unit = units[i][1];
   }
-  return duration.toFixed(1) + unit;
+  return unit !== "ms" ? duration.toFixed(1) + unit : duration + unit;
 }
 
 /**
@@ -106,8 +106,7 @@ export function sleep(ms: number) {
   });
 }
 
-export function print(str: string, prefix: string = "") {
-  const prefixLength = prefix.length;
+export function print(str: string, prefix = "", prefixLength = prefix.length) {
   process.stdout.write(
     prefix +
       str
