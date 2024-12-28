@@ -1,9 +1,10 @@
 import {
-  durationString,
   mapObject,
+  stringWithUnit,
   Timer,
   toObject,
   typedKeys,
+  UnitType,
   valueType,
 } from "./index.js";
 
@@ -13,7 +14,8 @@ const Stages = valueType<[number, number]>()({
   teen: [13, 19],
 });
 
-console.log(durationString(300432)); // 5.0m
+console.log(stringWithUnit(300432, UnitType.Duration)); // 5.0m
+console.log(stringWithUnit(1024, UnitType.Memory, "kb")); // 1.0mb
 
 const timer = new Timer();
 timer.stop();

@@ -36,37 +36,59 @@ type ValueTypeCheck<C> = <K extends string>(x: Record<K, C>) => Record<K, C>;
  */
 export const valueType = <C>() => ((x) => x) as ValueTypeCheck<C>;
 
-/**
- * Humans have an easier time parsing a single unit. This function converts a duration in milliseconds to the biggest unit shorter than the duration. It always displays one digit.
- *
- * Usage:
- * ```
- * durationString(1500) // 1.5s
- * durationString(86400000) // 1.0d
- * durationString(300432) // 5.0m
- * ```
- *
- * @param duration_ms duration in milliseconds
- * @returns "X.XU"
- */
-export function durationString(duration_ms: number) {
-  const units = [
+type Type = readonly (readonly [number, string])[];
+export const UnitType = {
+  Duration: [
+    [1, "ms"],
     [1000, "s"],
     [60, "m"],
     [60, "h"],
     [24, "d"],
-  ] as const;
-  let unit = "ms";
-  let duration = duration_ms;
-  for (let i = 0; duration >= units[i][0]; i++) {
+  ],
+  Memory: [
+    [1, "bytes"],
+    [1024, "kb"],
+    [1024, "mb"],
+    [1024, "gb"],
+    [1024, "tb"],
+  ],
+} as const;
+/**
+ * Humans have an easier time parsing fewer digits. This function converts a
+ * quantity to the biggest unit smaller than the amount. It always displays
+ * one digit, except for the base unit. You can specify which unit type to
+ * use, and which unit the input amount is.
+ *
+ * Usage:
+ * ```
+ * stringWithUnit(1500, UnitType.Duration) // 1.5s
+ * stringWithUnit(1024, UnitType.Memory, "kb") // 1.0mb
+ * ```
+ *
+ * @param amount
+ * @param unitType a list of (scale, unit) pairs
+ * @param inputUnit (optional) the unit the amount is in
+ * @returns "X.XU"
+ */
+export function stringWithUnit<
+  T extends readonly (readonly [number, string])[]
+>(amount: number, units: T, unit: T[number][1] = units[0][1]) {
+  let duration = amount;
+  for (
+    let i = units.findIndex((u) => u[1] === unit) + 1;
+    duration >= units[i][0];
+    i++
+  ) {
     duration /= units[i][0];
     unit = units[i][1];
   }
-  return unit !== "ms" ? duration.toFixed(1) + unit : duration + unit;
+  return unit !== units[0][1] ? duration.toFixed(1) + unit : duration + unit;
 }
 
 /**
- * Small console timer, for when you cannot move the cursor. It prints a . every second, every 5 seconds it prints a !, and every 10 it prints the next digit.
+ * Small console timer, for when you cannot move the cursor. It prints a .
+ * every second, every 5 seconds it prints a !, and every 10 it prints the next
+ * digit.
  *
  * Usage:
  * ```
