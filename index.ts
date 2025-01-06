@@ -128,29 +128,110 @@ export function sleep(ms: number) {
   });
 }
 
-export function print(str: string, prefix = "", prefixLength = prefix.length) {
-  process.stdout.write(
-    prefix +
-      str
-        .trimEnd()
-        .split("\n")
-        .flatMap((x) =>
-          (
-            x.match(
-              new RegExp(
-                `.{1,${
-                  process.stdout.getWindowSize()[0] - prefixLength
-                }}( |$)|.{1,${
-                  process.stdout.getWindowSize()[0] - prefixLength
-                }}`,
-                "g"
-              )
-            ) || []
-          ).map((x: string) => x.trimEnd())
-        )
-        .join(`\n${prefix}`) +
-      "\n"
+export function map<A, B>(
+  arr: A[],
+  f: (s: A) => B,
+  actions?: { first?: (s: A) => B; last?: (s: A) => B }
+) {
+  const result = new Array<B>(arr.length);
+  result[0] = (actions?.first || f)(arr[0]);
+  for (let i = 1; i < arr.length - 1; i++) {
+    result[i] = f(arr[i]);
+  }
+  result[arr.length - 1] = (actions?.last || f)(arr[arr.length - 1]);
+  return result;
+}
+
+const NORMAL_COLOR = "\u001B[0m";
+const invisible: { [prefix: string]: string[] } = {};
+export function print(
+  str: string,
+  prefix: string = "",
+  prefixColor: string = "\x1b[90m",
+  invisibleChars: string[] = [],
+  openEnded: boolean = false
+) {
+  if (invisible[prefix] === undefined || openEnded === false)
+    invisible[prefix] = [];
+  const removeInvisibleRegex = new RegExp(
+    "(" +
+      invisibleChars
+        .map((x) => x.replace(/\[/, "\\[").replace(/\?/, "\\?"))
+        .join("|") +
+      ")",
+    "gi"
   );
+  const prefixCleanLength = prefix.replace(removeInvisibleRegex, "").length;
+  // const prefixColors = prefix.match(removeInvisibleRegex);
+  // console.log(prefixColors);
+  const [headerPrefix, middlePrefix, footerPrefix, prefixLength] =
+    prefixCleanLength > 0
+      ? [
+          prefixColor + prefix + "┐" + NORMAL_COLOR,
+          prefixColor + " ".repeat(prefixCleanLength) + "│" + NORMAL_COLOR,
+          prefixColor + prefix + "┘" + NORMAL_COLOR,
+          prefixCleanLength + 1,
+        ]
+      : [prefix, prefix, prefix, 0];
+  const width = process.stdout.getWindowSize()[0];
+  const lines = map(
+    str
+      .trimEnd()
+      .split("\n")
+      .flatMap((l) => {
+        const words = l.split(" ");
+        const result: string[][] = [[]];
+        let widthLeft = width - prefixLength;
+        for (let i = 0; i < words.length; ) {
+          const wLength = words[i].replace(removeInvisibleRegex, "").length;
+          const inv = words[i].match(removeInvisibleRegex) || [];
+          invisible[prefix].push(...inv);
+          if (wLength > widthLeft) {
+            const smaller = words[i].split(/([\/])/i);
+            const smallResult: string[] = [];
+            let j = 0;
+            for (; j < smaller.length; j++) {
+              if (smaller[j].length === 0) continue;
+              const wLength = smaller[j].length;
+              if (wLength > widthLeft) {
+                break;
+              }
+              widthLeft -= wLength;
+              smallResult.push(smaller[j]);
+            }
+            if (smallResult.length > 1)
+              result[result.length - 1].push(smallResult.join(""));
+            const indentIndex = words.findIndex((x) => ![""].includes(x));
+            const indentAdd =
+              indentIndex > 0 || ["*", "-"].includes(words[0])
+                ? ["", "", smaller.slice(j).join("")]
+                : [smaller.slice(j).join("")];
+            words.splice(
+              i,
+              1,
+              ...result[result.length - 1].slice(0, indentIndex),
+              ...indentAdd
+            );
+            result.push([]);
+            widthLeft = width - prefixLength;
+          } else {
+            widthLeft -= wLength + 1;
+            result[result.length - 1].push(
+              result[result.length - 1].length === 0
+                ? invisible[prefix].join("") + words[i++]
+                : words[i++]
+            );
+          }
+        }
+        return result.map((ws) => ws.join(" "));
+      }),
+    (l) => middlePrefix + l,
+    {
+      first: (l) => headerPrefix + l,
+      last: openEnded === true ? undefined : (l) => footerPrefix + l,
+    }
+  ).join("\n");
+  process.stdout.write(lines + "\n");
 }
 
 export function typedKeys<T extends Record<string, unknown>>(
