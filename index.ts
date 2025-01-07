@@ -199,18 +199,23 @@ export function print(
               widthLeft -= wLength;
               smallResult.push(smaller[j]);
             }
-            if (smallResult.length > 1)
-              result[result.length - 1].push(smallResult.join(""));
             const indentIndex = words.findIndex((x) => ![""].includes(x));
-            const indentAdd =
-              indentIndex > 0 || ["*", "-"].includes(words[0])
-                ? ["", "", smaller.slice(j).join("")]
-                : [smaller.slice(j).join("")];
+            const iChars =
+              smallResult.length > 1
+                ? smallResult.join("").length
+                : widthLeft > 20
+                ? widthLeft
+                : 0;
+            if (iChars > 0)
+              result[result.length - 1].push(words[i].substring(0, iChars));
             words.splice(
               i,
               1,
               ...result[result.length - 1].slice(0, indentIndex),
-              ...indentAdd
+              ...(indentIndex > 0 || ["*", "-"].includes(words[0])
+                ? ["", ""]
+                : []),
+              words[i].substring(iChars)
             );
             result.push([]);
             widthLeft = width - prefixLength;
