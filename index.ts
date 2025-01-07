@@ -138,24 +138,24 @@ export function map<A, B>(
   for (let i = 1; i < arr.length - 1; i++) {
     result[i] = f(arr[i]);
   }
-  result[arr.length - 1] = (actions?.last || f)(arr[arr.length - 1]);
+  if (arr.length > 1)
+    result[arr.length - 1] = (actions?.last || f)(arr[arr.length - 1]);
   return result;
 }
 
 const NORMAL_COLOR = "\u001B[0m";
 const invisible: { [prefix: string]: string[] } = {};
+let lastPrefix: string | undefined = undefined;
 export function print(
   str: string,
   prefix: string = "",
+  invisibleChars: Set<string> = new Set(),
   prefixColor: string = "\x1b[90m",
-  invisibleChars: string[] = [],
   openEnded: boolean = false
 ) {
-  if (invisible[prefix] === undefined || openEnded === false)
-    invisible[prefix] = [];
   const removeInvisibleRegex = new RegExp(
     "(" +
-      invisibleChars
+      [...invisibleChars]
         .map((x) => x.replace(/\[/, "\\[").replace(/\?/, "\\?"))
         .join("|") +
       ")",
@@ -164,11 +164,17 @@ export function print(
   const prefixCleanLength = prefix.replace(removeInvisibleRegex, "").length;
   // const prefixColors = prefix.match(removeInvisibleRegex);
   // console.log(prefixColors);
+  const middleSymbol = " ".repeat(prefixCleanLength) + "│";
+  const headerSymbol =
+    openEnded === true && lastPrefix === prefix ? middleSymbol : prefix + "┐";
+  lastPrefix = prefix;
+  if (invisible[prefix] === undefined || openEnded === false)
+    invisible[prefix] = [];
   const [headerPrefix, middlePrefix, footerPrefix, prefixLength] =
     prefixCleanLength > 0
       ? [
-          prefixColor + prefix + "┐" + NORMAL_COLOR,
-          prefixColor + " ".repeat(prefixCleanLength) + "│" + NORMAL_COLOR,
+          prefixColor + headerSymbol + NORMAL_COLOR,
+          prefixColor + middleSymbol + NORMAL_COLOR,
           prefixColor + prefix + "┘" + NORMAL_COLOR,
           prefixCleanLength + 1,
         ]
@@ -183,35 +189,49 @@ export function print(
         const result: string[][] = [[]];
         let widthLeft = width - prefixLength;
         for (let i = 0; i < words.length; ) {
-          const wLength = words[i].replace(removeInvisibleRegex, "").length;
-          const inv = words[i].match(removeInvisibleRegex) || [];
-          invisible[prefix].push(...inv);
+          const cleanWord = words[i].replace(removeInvisibleRegex, "");
+          const wLength = cleanWord.length;
           if (wLength > widthLeft) {
-            const smaller = words[i].split(/([\/])/i);
-            const smallResult: string[] = [];
-            let j = 0;
-            for (; j < smaller.length; j++) {
+            const smaller = cleanWord.split(/([\/])/i);
+            let iChars = 0;
+            for (let j = 0; j < smaller.length; j++) {
               if (smaller[j].length === 0) continue;
               const wLength = smaller[j].length;
               if (wLength > widthLeft) {
                 break;
               }
               widthLeft -= wLength;
-              smallResult.push(smaller[j]);
+              iChars += wLength;
             }
             const indentIndex = words.findIndex((x) => ![""].includes(x));
-            const iChars =
-              smallResult.length > 1
-                ? smallResult.join("").length
-                : widthLeft > 20
-                ? widthLeft
-                : 0;
-            if (iChars > 0)
-              result[result.length - 1].push(words[i].substring(0, iChars));
+            const indent = words.slice(0, indentIndex);
+            if (widthLeft > 20) iChars += widthLeft;
+            if (iChars > 0) {
+              const allInv = [
+                ...(words[i].matchAll(removeInvisibleRegex) || []),
+              ];
+              const invs: string[] = [];
+              for (let a = 0; a < allInv.length; a++) {
+                const inv = allInv[a];
+                if (inv.index < iChars) {
+                  iChars += inv[0].length;
+                  invs.push(inv[0]);
+                } else {
+                  break;
+                }
+              }
+              const insert = words[i].substring(0, iChars);
+              result[result.length - 1].push(
+                result[result.length - 1].length === 0
+                  ? invisible[prefix].join("") + insert
+                  : insert
+              );
+              invisible[prefix].push(...invs);
+            }
             words.splice(
               i,
               1,
-              ...result[result.length - 1].slice(0, indentIndex),
+              ...indent,
               ...(indentIndex > 0 || ["*", "-"].includes(words[0])
                 ? ["", ""]
                 : []),
@@ -220,12 +240,14 @@ export function print(
             result.push([]);
             widthLeft = width - prefixLength;
           } else {
+            const inv = words[i].match(removeInvisibleRegex) || [];
             widthLeft -= wLength + 1;
             result[result.length - 1].push(
               result[result.length - 1].length === 0
                 ? invisible[prefix].join("") + words[i++]
                 : words[i++]
             );
+            invisible[prefix].push(...inv);
           }
         }
         return result.map((ws) => ws.join(" "));
