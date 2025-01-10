@@ -226,7 +226,7 @@ export function typedKeys(o) {
 }
 export function mapObject(o, f) {
     const res = {};
-    typedKeys(o).forEach((k) => (res[k] = f(o[k])));
+    typedKeys(o).forEach((k) => (res[k] = f(k, o[k])));
     return res;
 }
 export function partition(arr, f) {
