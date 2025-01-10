@@ -11,6 +11,7 @@ timer.stop();
 const o = { a: "hello", b: "hi" };
 // Object.keys(o).forEach((k) => o[k]); ERROR
 typedKeys(o).forEach((k) => o[k]);
+const of = (o) => mapObject(o, (k, v) => k.length);
 const oi = mapObject(o, (s) => s.length);
 toObject(typedKeys(o), (k) => o[k]);
 const s = { a: "hello", b: "hi" };

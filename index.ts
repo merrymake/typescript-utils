@@ -267,10 +267,10 @@ export function typedKeys<T extends Record<string, unknown>>(
   return Object.keys(o) as any;
 }
 
-export function mapObject<
-  B,
-  T extends { [k: string | number | symbol]: unknown }
->(o: T, f: (key: keyof T, val: T[keyof T]) => B): { [k in keyof T]: B } {
+export function mapObject<B, T extends { [k: string]: unknown }>(
+  o: T,
+  f: (key: keyof T & string, val: T[keyof T]) => B
+): { [k in keyof T]: B } {
   const res: any = {};
   typedKeys(o).forEach((k) => (res[k] = f(k, o[k])));
   return res;
