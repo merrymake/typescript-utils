@@ -1,3 +1,289 @@
+import { cpus } from "os";
+
+export const MILLISECONDS = 1;
+// Typescript doesn't do constant folding, and it's "as const" is broken. This should work, but doesn't:
+// export const SECONDS = (1000 * MILLISECONDS) as const;
+// export const MINUTES = (60 * SECONDS) as const;
+// export const HOURS = (60 * MINUTES) as const;
+// export const DAYS = (24 * HOURS) as const;
+// export const WEEKS = (7 * DAYS) as const;
+export const SECONDS = 1_000;
+export const MINUTES = 60_000;
+export const HOURS = 3_600_000;
+export const DAYS = 86_400_000;
+export const WEEKS = 604_800_000;
+
+export const SECONDS_IN_SECONDS = 1;
+export const MINUTES_IN_SECONDS = 60;
+export const HOURS_IN_SECONDS = 3_600;
+export const DAYS_IN_SECONDS = 86_400;
+export const WEEKS_IN_SECONDS = 604_800;
+
+export function Promise_all<T extends readonly unknown[] | []>(
+  arr: T & Promise<unknown>[]
+): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+  return Promise.all(arr);
+}
+
+export function sleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(() => resolve(), ms);
+  });
+}
+
+export namespace Arr {
+  export namespace Sync {
+    export function forEach<A>(arr: A[], f: (s: A, i: number) => unknown) {
+      arr.forEach(f);
+    }
+    export function map<A, B>(
+      arr: A[],
+      f: (s: A, i: number) => B,
+      actions?: { first?: (s: A) => B; last?: (s: A) => B; ends?: (s: A) => B }
+    ) {
+      const result = new Array<B>(arr.length);
+      forEach(arr, (v, i) => {
+        if (actions?.first !== undefined && i === 0)
+          result[i] = actions?.first(v);
+        else if (actions?.last !== undefined && i === arr.length - 1)
+          result[i] = actions?.last(v);
+        else if (
+          actions?.ends !== undefined &&
+          (i === 0 || i === arr.length - 1)
+        )
+          result[i] = actions?.ends(v);
+        else result[i] = f(arr[i], i);
+      });
+      return result;
+    }
+    export function partition<T>(arr: T[], f: (_: T) => boolean) {
+      const yes: T[] = [];
+      const no: T[] = [];
+      forEach(arr, (t) => (f(t) === true ? yes.push(t) : no.push(t)));
+      return { yes, no };
+    }
+    export function filter<T>(arr: T[], f: (_: T) => boolean) {
+      return partition(arr, f).yes;
+    }
+    export function zip<A, B, C>(
+      as: A[],
+      bs: B[],
+      f: (a: A, b: B, i: number) => C,
+      actions?: {
+        aRest?: (a: A, i: number) => C;
+        bRest?: (b: B, i: number) => C;
+      }
+    ) {
+      const len =
+        actions?.aRest !== undefined && actions?.bRest !== undefined
+          ? Math.max(as.length, bs.length)
+          : actions?.aRest !== undefined
+          ? as.length
+          : actions?.bRest !== undefined
+          ? bs.length
+          : Math.min(as.length, bs.length);
+      const result = new Array(len).fill(0);
+      forEach(result, (_, i) => {
+        result[i] =
+          i < as.length && i < bs.length
+            ? f(as[i], bs[i], i)
+            : i < as.length
+            ? actions!.aRest!(as[i], i)
+            : actions!.bRest!(bs[i], i);
+      });
+      return result;
+    }
+    export function toObject<K extends string[], T>(
+      keys: K,
+      val: (k: K[number]) => T
+    ) {
+      const result: { [key: string]: T } = {};
+      forEach(keys, (k) => (result[k] = val(k)));
+      return result as { [key in K[number]]: T };
+    }
+  }
+  export function Async(maxConcurrent = cpus().length) {
+    return {
+      forEach,
+      map,
+      partition,
+      filter,
+      zip,
+      toObject,
+    };
+    async function worker(tasks: (() => Promise<unknown>)[]) {
+      let t: (() => Promise<unknown>) | undefined;
+      while ((t = tasks.splice(0, 1)[0]) !== undefined) {
+        await t().then();
+      }
+    }
+    async function forEach<A>(
+      arr: A[],
+      f: (s: A, i: number) => Promise<unknown>
+    ) {
+      await Promise_all(
+        new Array(maxConcurrent)
+          .fill(0)
+          .map((_) => worker(arr.map((x, i) => () => f(x, i))))
+      ).then();
+    }
+    async function map<A, B>(
+      arr: A[],
+      f: (s: A, i: number) => Promise<B>,
+      actions?: {
+        first?: (s: A) => Promise<B>;
+        last?: (s: A) => Promise<B>;
+        ends?: (s: A) => Promise<B>;
+      }
+    ) {
+      const result = new Array<B>(arr.length);
+      await forEach(arr, async (v, i) => {
+        if (actions?.first !== undefined && i === 0)
+          result[i] = await actions.first(v);
+        else if (actions?.last !== undefined && i === arr.length - 1)
+          result[i] = await actions.last(v);
+        else if (
+          actions?.ends !== undefined &&
+          (i === 0 || i === arr.length - 1)
+        )
+          result[i] = await actions.ends(v);
+        else result[i] = await f(arr[i], i);
+      });
+      return result;
+    }
+    async function partition<T>(arr: T[], f: (_: T) => Promise<boolean>) {
+      const yes: T[] = [];
+      const no: T[] = [];
+      await forEach(arr, async (t) =>
+        (await f(t)) === true ? yes.push(t) : no.push(t)
+      );
+      return { yes, no };
+    }
+    async function filter<T>(arr: T[], f: (_: T) => Promise<boolean>) {
+      return (await partition(arr, f)).yes;
+    }
+    async function zip<A, B, C>(
+      as: A[],
+      bs: B[],
+      f: (a: A, b: B, i: number) => Promise<C>,
+      actions?: {
+        aRest?: (a: A, i: number) => Promise<C>;
+        bRest?: (b: B, i: number) => Promise<C>;
+      }
+    ) {
+      const len =
+        actions?.aRest !== undefined && actions?.bRest !== undefined
+          ? Math.max(as.length, bs.length)
+          : actions?.aRest !== undefined
+          ? as.length
+          : actions?.bRest !== undefined
+          ? bs.length
+          : Math.min(as.length, bs.length);
+      const result = new Array<C>(len);
+      await forEach(result, async (_, i) => {
+        result[i] =
+          i < as.length && i < bs.length
+            ? await f(as[i], bs[i], i)
+            : i < as.length
+            ? await actions!.aRest!(as[i], i)
+            : await actions!.bRest!(bs[i], i);
+      });
+      return result;
+    }
+    async function toObject<K extends string[], T>(
+      keys: K,
+      val: (k: K[number]) => Promise<T>
+    ) {
+      const result: { [key: string]: T } = {};
+      await forEach(keys, async (k) => (result[k] = await val(k)));
+      return result as { [key in K[number]]: T };
+    }
+  }
+}
+
+export namespace Obj {
+  export namespace Sync {
+    export function keys<T extends Record<string, unknown>>(
+      o: T
+    ): Array<keyof T & string> {
+      return Object.keys(o) as any;
+    }
+    export function forEach<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => unknown
+    ) {
+      Arr.Sync.forEach(keys(o), (k) => f(k, o[k]));
+    }
+    export function map<B, T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => B
+    ): { [k in keyof T]: B } {
+      const res: { [k in keyof T]?: B } = {};
+      forEach(o, (k) => (res[k] = f(k, o[k])));
+      return res as any;
+    }
+    export function partition<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => boolean
+    ): { yes: { [k in keyof T]?: T[k] }; no: { [k in keyof T]?: T[k] } } {
+      const yes: { [k in keyof T]?: T[k] } = {};
+      const no: { [k in keyof T]?: T[k] } = {};
+      forEach(o, (k) =>
+        f(k, o[k]) === true ? (yes[k] = o[k]) : (no[k] = o[k])
+      );
+      return { yes, no };
+    }
+    export function filter<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => boolean
+    ) {
+      return partition(o, f).yes;
+    }
+  }
+  export function Async(maxConcurrent = cpus().length) {
+    return {
+      forEach,
+      map,
+      partition,
+      filter,
+    };
+    async function forEach<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<unknown>
+    ) {
+      await Arr.Async(maxConcurrent).forEach(Sync.keys(o), (k) => f(k, o[k]));
+    }
+    async function map<B, T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<B>
+    ): Promise<{ [k in keyof T]: B }> {
+      const res: { [k in keyof T]?: B } = {};
+      await forEach(o, async (k) => (res[k] = await f(k, o[k])));
+      return res as any;
+    }
+    async function partition<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<boolean>
+    ): Promise<{
+      yes: { [k in keyof T]?: T[k] };
+      no: { [k in keyof T]?: T[k] };
+    }> {
+      const yes: { [k in keyof T]?: T[k] } = {};
+      const no: { [k in keyof T]?: T[k] } = {};
+      await forEach(o, async (k) =>
+        (await f(k, o[k])) === true ? (yes[k] = o[k]) : (no[k] = o[k])
+      );
+      return { yes, no };
+    }
+    async function filter<T extends { [k: string]: unknown }>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<boolean>
+    ) {
+      return (await partition(o, f)).yes;
+    }
+  }
+}
+
 type ValueTypeCheck<C> = <K extends string>(x: Record<K, C>) => Record<K, C>;
 /**
  * Specify type of elements without loosing field names.
@@ -36,8 +322,7 @@ type ValueTypeCheck<C> = <K extends string>(x: Record<K, C>) => Record<K, C>;
  */
 export const valueType = <C>() => ((x) => x) as ValueTypeCheck<C>;
 
-type Type = readonly (readonly [number, string])[];
-export const UnitType = {
+export const UnitType = valueType<readonly (readonly [number, string])[]>()({
   Duration: [
     [1, "ms"],
     [1000, "s"],
@@ -52,7 +337,7 @@ export const UnitType = {
     [1024, "gb"],
     [1024, "tb"],
   ],
-} as const;
+});
 /**
  * Humans have an easier time parsing fewer digits. This function converts a
  * quantity to the biggest unit smaller than the amount. It always displays
@@ -116,54 +401,92 @@ export class Timer {
   }
 }
 
-export function Promise_all<T extends readonly unknown[] | []>(
-  arr: T & Promise<unknown>[]
-): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-  return Promise.all(arr);
-}
-
-export function sleep(ms: number) {
-  return new Promise<void>((resolve) => {
-    setTimeout(() => resolve(), ms);
-  });
-}
-
-export function map<A, B>(
-  arr: A[],
-  f: (s: A) => B,
-  actions?: { first?: (s: A) => B; last?: (s: A) => B }
-) {
-  const result = new Array<B>(arr.length);
-  result[0] = (actions?.first || f)(arr[0]);
-  for (let i = 1; i < arr.length - 1; i++) {
-    result[i] = f(arr[i]);
+class InvisibleHand {
+  private regex: RegExp;
+  constructor(invisibleChars: Set<string>) {
+    this.regex = new RegExp(
+      "(" +
+        [...invisibleChars]
+          .map((x) => x.replace(/\[/, "\\[").replace(/\?/, "\\?"))
+          .join("|") +
+        ")",
+      "gi"
+    );
   }
-  if (arr.length > 1)
-    result[arr.length - 1] = (actions?.last || f)(arr[arr.length - 1]);
-  return result;
+  remove(str: string) {
+    return str.replace(this.regex, "");
+  }
+  length(str: string) {
+    return this.remove(str).length;
+  }
+  match(str: string) {
+    return str.match(this.regex);
+  }
+  matchAll(str: string) {
+    return str.matchAll(this.regex);
+  }
 }
+export const NORMAL_COLOR = "\x1b[0m";
+export const BLACK = "\x1b[30m";
+export const RED = "\x1b[31m";
+export const GREEN = "\x1b[32m";
+export const YELLOW = "\x1b[33m";
+export const BLUE = "\x1b[34m";
+export const PURPLE = "\x1b[35m";
+export const CYAN = "\x1b[36m";
+export const WHITE = "\x1b[37m";
+export const GRAY = "\x1b[90m";
+export const BG_BLACK = "\x1b[40m";
+export const BG_RED = "\x1b[41m";
+export const BG_GREEN = "\x1b[42m";
+export const BG_YELLOW = "\x1b[43m";
+export const BG_BLUE = "\x1b[44m";
+export const BG_PURPLE = "\x1b[45m";
+export const BG_CYAN = "\x1b[46m";
+export const BG_WHITE = "\x1b[47m";
+export const BG_GRAY = "\x1b[100m";
+export const STRIKE = "\x1b[9m";
+export const NO_STRIKE = "\x1b[29m";
+const DEFAULT_INVISIBLE = new InvisibleHand(
+  new Set([
+    NORMAL_COLOR,
+    BLACK,
+    RED,
+    GREEN,
+    YELLOW,
+    BLUE,
+    PURPLE,
+    CYAN,
+    WHITE,
+    GRAY,
+    BG_BLACK,
+    BG_RED,
+    BG_GREEN,
+    BG_YELLOW,
+    BG_BLUE,
+    BG_PURPLE,
+    BG_CYAN,
+    BG_WHITE,
+    BG_GRAY,
+    STRIKE,
+    NO_STRIKE,
+  ])
+);
 
-const NORMAL_COLOR = "\u001B[0m";
 const invisible: { [prefix: string]: string[] } = {};
 let lastPrefix: string | undefined = undefined;
 export function print(
   str: string,
   prefix: string = "",
-  invisibleChars: Set<string> = new Set(),
+  invisibleChars?: Set<string>,
   prefixColor: string = "\x1b[90m",
   openEnded: boolean = false
 ) {
-  const removeInvisibleRegex = new RegExp(
-    "(" +
-      [...invisibleChars]
-        .map((x) => x.replace(/\[/, "\\[").replace(/\?/, "\\?"))
-        .join("|") +
-      ")",
-    "gi"
-  );
-  const prefixCleanLength = prefix.replace(removeInvisibleRegex, "").length;
-  // const prefixColors = prefix.match(removeInvisibleRegex);
-  // console.log(prefixColors);
+  const invisibleHand =
+    invisibleChars === undefined
+      ? DEFAULT_INVISIBLE
+      : new InvisibleHand(invisibleChars);
+  const prefixCleanLength = invisibleHand.length(prefix);
   const middleSymbol = " ".repeat(prefixCleanLength) + "│";
   const headerSymbol =
     openEnded === true && lastPrefix === prefix ? middleSymbol : prefix + "┐";
@@ -180,7 +503,7 @@ export function print(
         ]
       : [prefix, prefix, prefix, 0];
   const width = process.stdout.getWindowSize()[0];
-  const lines = map(
+  const lines = Arr.Sync.map(
     str
       .trimEnd()
       .split("\n")
@@ -189,7 +512,7 @@ export function print(
         const result: string[][] = [[]];
         let widthLeft = width - prefixLength;
         for (let i = 0; i < words.length; ) {
-          const cleanWord = words[i].replace(removeInvisibleRegex, "");
+          const cleanWord = invisibleHand.remove(words[i]);
           const wLength = cleanWord.length;
           if (wLength > widthLeft) {
             const smaller = cleanWord.split(/([\/])/i);
@@ -207,9 +530,7 @@ export function print(
             const indent = words.slice(0, indentIndex);
             if (widthLeft > 20) iChars += widthLeft;
             if (iChars > 0) {
-              const allInv = [
-                ...(words[i].matchAll(removeInvisibleRegex) || []),
-              ];
+              const allInv = [...(invisibleHand.matchAll(words[i]) || [])];
               const invs: string[] = [];
               for (let a = 0; a < allInv.length; a++) {
                 const inv = allInv[a];
@@ -240,7 +561,7 @@ export function print(
             result.push([]);
             widthLeft = width - prefixLength;
           } else {
-            const inv = words[i].match(removeInvisibleRegex) || [];
+            const inv = invisibleHand.match(words[i]) || [];
             widthLeft -= wLength + 1;
             result[result.length - 1].push(
               result[result.length - 1].length === 0
@@ -261,33 +582,114 @@ export function print(
   process.stdout.write(lines + "\n");
 }
 
-export function typedKeys<T extends Record<string, unknown>>(
-  o: T
-): Array<keyof T & string> {
-  return Object.keys(o) as any;
+function aligner(align: (s: string, w: number) => string) {
+  return (str: string, width: number, invisibleHand: InvisibleHand) => {
+    const cleanStr = invisibleHand.remove(str);
+    if (cleanStr.length <= width) return align(str, width - cleanStr.length);
+    const allInv = [...(invisibleHand.matchAll(str) || [])];
+    let take = width - 3;
+    while (allInv.length > 0 && allInv[0].index < take) {
+      take += allInv.shift()![0].length;
+    }
+    return str.substring(0, take) + "..." + allInv.map((x) => x[0]).join("");
+  };
+}
+const alignRight = aligner((s, w) => " ".repeat(w) + s);
+const alignLeft = aligner((s, w) => s + " ".repeat(w));
+const alignCenter = aligner((s, w) => {
+  const l = ~~(w / 2);
+  const r = w - l;
+  return " ".repeat(l) + s + " ".repeat(r);
+});
+
+class Table {
+  private rows: string[] = [];
+  constructor(
+    columns: string[],
+    private config: [number, (s: string) => string][]
+  ) {
+    this.addRow(...columns);
+    this.addDivider();
+  }
+  addDivider() {
+    this.rows.push(
+      Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─")
+    );
+    return this;
+  }
+  addRow(...values: string[]) {
+    this.rows.push(
+      Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(" │ ")
+    );
+    return this;
+  }
+  toString() {
+    return this.rows.join("\n");
+  }
 }
 
-export function mapObject<B, T extends { [k: string]: unknown }>(
-  o: T,
-  f: (key: keyof T & string, val: T[keyof T]) => B
-): { [k in keyof T]: B } {
-  const res: any = {};
-  typedKeys(o).forEach((k) => (res[k] = f(k, o[k])));
-  return res;
-}
-
-export function partition<T>(arr: T[], f: (_: T) => boolean) {
-  const yes: T[] = [];
-  const no: T[] = [];
-  arr.forEach((t) => (f(t) ? yes.push(t) : no.push(t)));
-  return { yes, no };
-}
-
-export function toObject<K extends string[], T>(
-  keys: K,
-  val: (k: K[number]) => T
-) {
-  const result: { [key: string]: T } = {};
-  keys.forEach((k) => (result[k] = val(k)));
-  return result as { [key in K[number]]: T };
+/**
+ * Used to draw pretty ascii tables. The header determines column count,
+ * width, and alignment. Use the format:
+ *
+ * ```Typescript
+ * asciiTable("Title     | Stat | Runtime_|_Unit");
+ * ```
+ *
+ * Means:
+ * - `Title` is _left_ aligned, 9 chars wide
+ * - `Stat` is _centered_, 4 chars wide
+ * - `Runtime` is _right_ aligned, 7 chars wide
+ * - `Unit` is _left_ aligned, 4 chars wide
+ *
+ * Notice: A nice benefit is that you can select the header string and see
+ * exactly how wide it will be in the console.
+ *
+ * Calling this function gives you a table object, which you can add rows to,
+ * and eventually print.
+ *
+ * @param columns
+ * @returns
+ */
+export function asciiTable(header: string, invisibleChars?: Set<string>) {
+  const invisibleHand =
+    invisibleChars === undefined
+      ? DEFAULT_INVISIBLE
+      : new InvisibleHand(invisibleChars);
+  const columns = header.split("|");
+  return new Table(
+    Arr.Sync.map(columns, (s) => s.substring(1, s.length - 1).trim(), {
+      first: (s) => s.substring(0, s.length - 1).trim(),
+      last: (s) => s.substring(1).trim(),
+    }),
+    Arr.Sync.map(
+      columns,
+      (c) => [
+        c.length - 2,
+        (c[0] === " ") === (c[c.length - 1] === " ")
+          ? (s) => alignCenter(s, c.length - 2, invisibleHand)
+          : c[0] === " "
+          ? (s) => alignRight(s, c.length - 2, invisibleHand)
+          : (s) => alignLeft(s, c.length - 2, invisibleHand),
+      ],
+      {
+        first: (c) => [
+          c.length - 1,
+          c[0] === " " && c[c.length - 1] === " "
+            ? (s) => alignCenter(s, c.length - 1, invisibleHand)
+            : c[c.length - 1] === " "
+            ? (s) => alignLeft(s, c.length - 1, invisibleHand)
+            : (s) => alignRight(s, c.length - 1, invisibleHand),
+        ],
+        last: (c) => [
+          c.length - 1,
+          c[0] === " " && c[c.length - 1] === " "
+            ? (s) => alignCenter(s, c.length - 1, invisibleHand)
+            : c[0] === " "
+            ? (s) => alignRight(s, c.length - 1, invisibleHand)
+            : (s) => alignLeft(s, c.length - 1, invisibleHand),
+        ],
+      }
+    )
+  );
 }

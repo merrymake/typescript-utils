@@ -1,4 +1,4 @@
-import { mapObject, stringWithUnit, Timer, toObject, typedKeys, UnitType, valueType, } from "./index.js";
+import { Arr, Obj, stringWithUnit, Timer, UnitType, valueType, } from "./index.js";
 const Stages = valueType()({
     baby: [0, 0],
     child: [1, 12],
@@ -10,9 +10,9 @@ const timer = new Timer();
 timer.stop();
 const o = { a: "hello", b: "hi" };
 // Object.keys(o).forEach((k) => o[k]); ERROR
-typedKeys(o).forEach((k) => o[k]);
-const of = (o) => mapObject(o, (k, v) => k.length);
-const oi = mapObject(o, (s) => s.length);
-toObject(typedKeys(o), (k) => o[k]);
+Obj.Sync.forEach(o, (k) => o[k]);
+const of = (o) => Obj.Sync.map(o, (k, v) => k.length);
+const oi = Obj.Sync.map(o, (s) => s.length);
+Arr.Sync.toObject(Obj.Sync.keys(o), (k) => o[k]);
 const s = { a: "hello", b: "hi" };
-typedKeys(s).forEach((k) => k.substring(0));
+Obj.Sync.forEach(s, (k) => k.substring(0));

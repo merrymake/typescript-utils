@@ -1,9 +1,9 @@
 import {
-  mapObject,
+  Arr,
+  asciiTable,
+  Obj,
   stringWithUnit,
   Timer,
-  toObject,
-  typedKeys,
   UnitType,
   valueType,
 } from "./index.js";
@@ -22,10 +22,11 @@ timer.stop();
 
 const o = { a: "hello", b: "hi" };
 // Object.keys(o).forEach((k) => o[k]); ERROR
-typedKeys(o).forEach((k) => o[k]);
-const of = (o: { [key: string]: string }) => mapObject(o, (k, v) => k.length);
-const oi = mapObject(o, (s) => s.length);
-toObject(typedKeys(o), (k) => o[k]);
+Obj.Sync.forEach(o, (k) => o[k]);
+const of = (o: { [key: string]: string }) =>
+  Obj.Sync.map(o, (k, v) => k.length);
+const oi = Obj.Sync.map(o, (s) => s.length);
+Arr.Sync.toObject(Obj.Sync.keys(o), (k) => o[k]);
 
 const s: { [k: string]: string } = { a: "hello", b: "hi" };
-typedKeys(s).forEach((k) => k.substring(0));
+Obj.Sync.forEach(s, (k) => k.substring(0));
