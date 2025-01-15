@@ -146,15 +146,16 @@ export var Arr;
         }
         async function findAny(arr, f) {
             let result = undefined;
-            await Promise_all(new Array(maxConcurrent).fill(0).map((_) => worker(arr.map((x, i) => async () => {
-                if (await f(x, i)) {
+            const tasks = arr.map((x, i) => async () => {
+                if ((await f(x, i).then()) === true) {
                     result = { value: x, index: i };
                     return true;
                 }
                 else {
                     return false;
                 }
-            })))).then();
+            });
+            await Promise_all(new Array(maxConcurrent).fill(0).map((_) => worker(tasks))).then();
             return result;
         }
         async function forEach(arr, f) {
@@ -974,11 +975,9 @@ export var Str;
             toggle3: ["□", "■"],
             toggle4: ["■", "□", "▪", "▫"],
             toggle5: ["▮", "▯"],
-            toggle6: ["ဝ", "၀"],
             toggle7: ["⦾", "⦿"],
             toggle8: ["◍", "◌"],
             toggle9: ["◉", "◎"],
-            toggle10: ["㊂", "㊀", "㊁"],
             toggle11: ["⧇", "⧆"],
             toggle12: ["☗", "☖"],
             toggle13: ["=", "*", "-"],
@@ -1190,31 +1189,6 @@ export var Str;
                 "▐/|____________▌",
             ],
             dqpb: ["d", "q", "p", "b"],
-            weather: [
-                "☀️ ",
-                "☀️ ",
-                "☀️ ",
-                "🌤 ",
-                "⛅️ ",
-                "🌥 ",
-                "☁️ ",
-                "🌧 ",
-                "🌨 ",
-                "🌧 ",
-                "🌨 ",
-                "🌧 ",
-                "🌨 ",
-                "⛈ ",
-                "🌨 ",
-                "🌧 ",
-                "🌨 ",
-                "☁️ ",
-                "🌥 ",
-                "⛅️ ",
-                "🌤 ",
-                "☀️ ",
-                "☀️ ",
-            ],
             christmas: ["🌲", "🎄"],
             grenade: [
                 "،  ",
@@ -1244,29 +1218,6 @@ export var Str;
                 "ββββββρ",
             ],
             fingerDance: ["🤘 ", "🤟 ", "🖖 ", "✋ ", "🤚 ", "👆 "],
-            fistBump: [
-                "🤜\u3000\u3000\u3000\u3000🤛 ",
-                "🤜\u3000\u3000\u3000\u3000🤛 ",
-                "🤜\u3000\u3000\u3000\u3000🤛 ",
-                "\u3000🤜\u3000\u3000🤛\u3000 ",
-                "\u3000\u3000🤜🤛\u3000\u3000 ",
-                "\u3000🤜✨🤛\u3000\u3000 ",
-                "🤜\u3000✨\u3000🤛\u3000 ",
-            ],
-            soccerHeader: [
-                " 🧑⚽️       🧑 ",
-                "🧑  ⚽️      🧑 ",
-                "🧑   ⚽️     🧑 ",
-                "🧑    ⚽️    🧑 ",
-                "🧑     ⚽️   🧑 ",
-                "🧑      ⚽️  🧑 ",
-                "🧑       ⚽️🧑  ",
-                "🧑      ⚽️  🧑 ",
-                "🧑     ⚽️   🧑 ",
-                "🧑    ⚽️    🧑 ",
-                "🧑   ⚽️     🧑 ",
-                "🧑  ⚽️      🧑 ",
-            ],
             mindblown: [
                 "😐 ",
                 "😐 ",
@@ -1458,27 +1409,33 @@ export var Str;
                 " ██████£££  ",
             ],
         };
-        static start(steps = Obj.random(Spinner.format).value) {
+        static start(steps) {
+            if (steps === undefined) {
+                const random = Obj.random(Spinner.format);
+                console.log(random.key);
+                steps = random.value;
+            }
             if (process.stdout.isTTY === false)
                 throw "Not a TTY console, please use 'Timer.format.NoTTY'";
             return new Spinner(steps);
         }
         interval;
         before;
-        spinnerIndex = 0;
+        spinnerIndex = -1;
         constructor(steps) {
             this.steps = steps;
             this.before = Date.now();
             process.stdout.write(Str.HIDE_CURSOR);
             this.interval = setInterval(() => {
-                process.stdout.write(this.steps[(this.spinnerIndex = (this.spinnerIndex + 1) % this.steps.length)]);
-                process.stdout.moveCursor(-this.steps[0].length, 0);
+                this.spinnerIndex = (this.spinnerIndex + 1) % this.steps.length;
+                process.stdout.write(this.steps[this.spinnerIndex]);
+                process.stdout.moveCursor(-this.steps[this.spinnerIndex].length, 0);
             }, 125);
         }
         stop() {
             clearInterval(this.interval);
-            process.stdout.write(" ".repeat(this.steps[0].length));
-            process.stdout.moveCursor(-this.steps[0].length, 0);
+            process.stdout.write(" ".repeat(this.steps[this.spinnerIndex].length));
+            process.stdout.moveCursor(-this.steps[this.spinnerIndex].length, 0);
             process.stdout.write(Str.SHOW_CURSOR);
             return Date.now() - this.before;
         }
@@ -1486,94 +1443,121 @@ export var Str;
     Str.Spinner = Spinner;
     Str.HIDE_CURSOR = "\u001B[?25l";
     Str.SHOW_CURSOR = "\u001B[?25h";
-    class NoTTY {
-        start() { }
-        tickSec(secs) {
-            if (secs % 10 === 0)
-                process.stdout.write(((secs / 10) % 10).toString());
-            else if (secs % 5 === 0)
-                process.stdout.write("!");
-            else
-                process.stdout.write(".");
+    let Timer;
+    (function (Timer_1) {
+        /**
+         * Small console timer, for when you cannot move the cursor. It prints a .
+         * every second, every 5 seconds it prints a !, and every 10 it prints the next
+         * digit.
+         */
+        class NoTTY {
+            start() { }
+            tickSec(secs) {
+                if (secs % 10 === 0)
+                    process.stdout.write(((secs / 10) % 10).toString());
+                else if (secs % 5 === 0)
+                    process.stdout.write("!");
+                else
+                    process.stdout.write(".");
+            }
+            end() {
+                process.stdout.write("\n");
+            }
+            requiresTTY() {
+                return false;
+            }
         }
-        end() {
-            process.stdout.write("\n");
+        Timer_1.NoTTY = NoTTY;
+        class Seconds {
+            suffix;
+            lastLength = 0;
+            constructor(suffix = "") {
+                this.suffix = suffix;
+            }
+            start() {
+                process.stdout.write(Str.HIDE_CURSOR);
+            }
+            tickSec(secs) {
+                const out = secs.toString() + this.suffix;
+                if (this.lastLength > 0)
+                    process.stdout.moveCursor(-this.lastLength, 0);
+                this.lastLength = out.length;
+                process.stdout.write(out);
+            }
+            end() {
+                if (this.lastLength > 0)
+                    process.stdout.moveCursor(this.lastLength, 0);
+                process.stdout.write(Str.SHOW_CURSOR);
+            }
+            requiresTTY() {
+                return true;
+            }
         }
-    }
-    class Seconds {
-        lastLength = 0;
-        start() {
-            process.stdout.write(Str.HIDE_CURSOR);
+        Timer_1.Seconds = Seconds;
+        class Colon {
+            suffix;
+            lastLength = 0;
+            constructor(suffix = "") {
+                this.suffix = suffix;
+            }
+            start() {
+                process.stdout.write(Str.HIDE_CURSOR);
+            }
+            tickSec(secs) {
+                const out = (~~(secs / 60)).toString() +
+                    ":" +
+                    secs.toString().padStart(2, "0") +
+                    this.suffix;
+                if (this.lastLength > 0)
+                    process.stdout.moveCursor(-this.lastLength, 0);
+                this.lastLength = out.length;
+                process.stdout.write(out);
+            }
+            end() {
+                if (this.lastLength > 0)
+                    process.stdout.moveCursor(this.lastLength, 0);
+                process.stdout.write(Str.SHOW_CURSOR);
+            }
+            requiresTTY() {
+                return true;
+            }
         }
-        tickSec(secs) {
-            const out = secs.toString();
-            if (this.lastLength > 0)
-                process.stdout.moveCursor(-this.lastLength, 0);
-            this.lastLength = out.length;
-            process.stdout.write(out);
+        Timer_1.Colon = Colon;
+        /**
+         * Usage:
+         * ```
+         * const timer = Timer.start();
+         * // Do some slow work
+         * const duration = timer.stop();
+         * ```
+         */
+        class Timer {
+            format;
+            interval;
+            before;
+            constructor(format) {
+                this.format = format;
+                this.before = Date.now();
+                format.start();
+                format.tickSec(0);
+                this.interval = setInterval(() => {
+                    format.tickSec(Math.round((Date.now() - this.before) / 1000));
+                }, 1000);
+            }
+            stop() {
+                clearInterval(this.interval);
+                this.format.tickSec(Math.round((Date.now() - this.before) / 1000));
+                this.format.end();
+                return Date.now() - this.before;
+            }
         }
-        end() {
-            process.stdout.write(Str.SHOW_CURSOR);
-        }
-    }
-    class Colon {
-        lastLength = 0;
-        start() {
-            process.stdout.write(Str.HIDE_CURSOR);
-        }
-        tickSec(secs) {
-            const out = (~~(secs / 60)).toString() + ":" + secs.toString().padStart(2, "0");
-            if (this.lastLength > 0)
-                process.stdout.moveCursor(-this.lastLength, 0);
-            this.lastLength = out.length;
-            process.stdout.write(out);
-        }
-        end() {
-            process.stdout.write(Str.SHOW_CURSOR);
-        }
-    }
-    /**
-     * Usage:
-     * ```
-     * const timer = Timer.start();
-     * // Do some slow work
-     * const duration = timer.stop();
-     * ```
-     */
-    class Timer {
-        format;
-        static format = valueType()({
-            /**
-             * Small console timer, for when you cannot move the cursor. It prints a .
-             * every second, every 5 seconds it prints a !, and every 10 it prints the next
-             * digit.
-             */
-            NoTTY: [new NoTTY(), false],
-            Seconds: [new Seconds(), true],
-            Colon: [new Colon(), true],
-        });
-        static start(format = Timer.format.NoTTY) {
-            if (format[1] === true && process.stdout.isTTY === false)
+        function start(format = new NoTTY()) {
+            if (format.requiresTTY() === true && process.stdout.isTTY === false)
                 throw "Not a TTY console, please use 'Timer.format.NoTTY'";
-            return new Timer(format[0]);
+            return new Timer(format);
         }
-        interval;
-        before;
-        constructor(format) {
-            this.format = format;
-            this.before = Date.now();
-            format.start();
-            this.interval = setInterval(() => {
-                format.tickSec(Math.round((Date.now() - this.before) / 1000));
-            }, 1000);
-        }
-        stop() {
-            clearInterval(this.interval);
-            this.format.end();
-            return Date.now() - this.before;
-        }
-    }
-    Str.Timer = Timer;
+        Timer_1.start = start;
+    })(Timer = Str.Timer || (Str.Timer = {}));
     class InvisibleHand {
         static lastInvisibleChars;
         static lastInvisibleHand;

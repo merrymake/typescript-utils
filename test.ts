@@ -16,7 +16,7 @@ console.log(Str.withUnit(1024, UnitType.Memory, "kb")); // 1.0mb
     timer.stop();
   }
   {
-    const timer = Str.Timer.start(Str.Timer.format.Colon);
+    const timer = Str.Timer.start(new Str.Timer.Seconds("s elapsed"));
     await sleep(12000);
     timer.stop();
   }
