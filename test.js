@@ -8,7 +8,9 @@ console.log(Str.withUnit(300432, UnitType.Duration)); // 5.0m
 console.log(Str.withUnit(1024, UnitType.Memory, "kb")); // 1.0mb
 (async () => {
     {
-        const timer = Str.Spinner.start();
+        const format = Obj.random(Str.Spinner.format);
+        console.log(format.key);
+        const timer = Str.Spinner.start(format.value);
         await sleep(5000);
         timer.stop();
     }

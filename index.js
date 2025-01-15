@@ -1409,12 +1409,7 @@ export var Str;
                 " ██████£££  ",
             ],
         };
-        static start(steps) {
-            if (steps === undefined) {
-                const random = Obj.random(Spinner.format);
-                console.log(random.key);
-                steps = random.value;
-            }
+        static start(steps = Obj.random(Spinner.format).value) {
             if (process.stdout.isTTY === false)
                 throw "Not a TTY console, please use 'Timer.format.NoTTY'";
             return new Spinner(steps);

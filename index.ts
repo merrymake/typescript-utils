@@ -1548,12 +1548,7 @@ export namespace Str {
         " ██████£££  ",
       ],
     } as const;
-    static start(steps?: readonly string[]) {
-      if (steps === undefined) {
-        const random = Obj.random(Spinner.format);
-        console.log(random.key);
-        steps = random.value;
-      }
+    static start(steps: readonly string[] = Obj.random(Spinner.format).value) {
       if (process.stdout.isTTY === false)
         throw "Not a TTY console, please use 'Timer.format.NoTTY'";
       return new Spinner(steps);
