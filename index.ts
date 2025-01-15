@@ -1803,7 +1803,7 @@ export namespace Str {
             const cleanWord = invisibleHand.remove(words[i]);
             const wLength = cleanWord.length;
             if (wLength > widthLeft) {
-              const smaller = cleanWord.split(/([\/])/i);
+              const smaller = cleanWord.split(/(.+?[\/,])/i);
               let iChars = 0;
               for (let j = 0; j < smaller.length; j++) {
                 if (smaller[j].length === 0) continue;
