@@ -15,6 +15,13 @@ export const MINUTES_IN_SECONDS = 60;
 export const HOURS_IN_SECONDS = 3_600;
 export const DAYS_IN_SECONDS = 86_400;
 export const WEEKS_IN_SECONDS = 604_800;
+export const BYTES = 1;
+export const KILOBYTES = 1_024;
+export const MEGABYTES = 1_048_576;
+export const GIGABYTES = 1_073_741_824;
+export const TERABYTES = 1_099_511_627_776;
+export const PETABYTES = 1_125_899_906_842_624;
+// export const EXABYTES = 1_152_921_504_606_846_976;
 /**
  * Promise.all([4, 3]); // BROKEN
  * Promise_all([4, 3]); // Much nicer
@@ -78,6 +85,22 @@ export var Arr;
             return result;
         }
         Sync.map = map;
+        function flatMap(arr, f, actions) {
+            const result = [];
+            forEach(arr, (v, i) => {
+                if (actions?.first !== undefined && i === 0)
+                    result.push(...actions?.first(v));
+                else if (actions?.last !== undefined && i === arr.length - 1)
+                    result.push(...actions?.last(v));
+                else if (actions?.ends !== undefined &&
+                    (i === 0 || i === arr.length - 1))
+                    result.push(...actions?.ends(v));
+                else
+                    result.push(...f(arr[i], i));
+            });
+            return result;
+        }
+        Sync.flatMap = flatMap;
         function partition(arr, f) {
             const yes = [];
             const no = [];
@@ -117,6 +140,38 @@ export var Arr;
             return !some(arr, (t, i) => !f(t, i));
         }
         Sync.all = all;
+        function reduce(arr, f, base) {
+            let accumulator = base;
+            forEach(arr, (v, i) => {
+                accumulator = f(accumulator, arr[i], i);
+            });
+            return accumulator;
+        }
+        Sync.reduce = reduce;
+        function maxBy(arr, f) {
+            let res = undefined;
+            forEach(arr, (element, index) => {
+                const value = f(element);
+                if (res === undefined || res.value < value) {
+                    res = { element, index, value };
+                }
+            });
+            return res;
+        }
+        Sync.maxBy = maxBy;
+        function minBy(arr, f) {
+            let res = undefined;
+            forEach(arr, (element, index) => {
+                const value = f(element);
+                if (res === undefined || res.value > value) {
+                    res = { element, index, value };
+                }
+            });
+            return res;
+        }
+        Sync.minBy = minBy;
+        Sync.max = (arr) => maxBy(arr, (x) => x);
+        Sync.min = (arr) => minBy(arr, (x) => x);
         function toObject(keys, val) {
             const result = {};
             forEach(keys, (k) => (result[k] = val(k)));
@@ -129,11 +184,14 @@ export var Arr;
             findAny,
             forEach,
             map,
+            flatMap,
             partition,
             filter,
             zip,
             some,
             all,
+            maxBy,
+            minBy,
             toObject,
         };
         async function worker(tasks) {
@@ -179,6 +237,21 @@ export var Arr;
             });
             return result;
         }
+        async function flatMap(arr, f, actions) {
+            const result = [];
+            await forEach(arr, async (v, i) => {
+                if (actions?.first !== undefined && i === 0)
+                    result.push(...(await actions.first(v)));
+                else if (actions?.last !== undefined && i === arr.length - 1)
+                    result.push(...(await actions.last(v)));
+                else if (actions?.ends !== undefined &&
+                    (i === 0 || i === arr.length - 1))
+                    result.push(...(await actions.ends(v)));
+                else
+                    result.push(...(await f(arr[i], i)));
+            });
+            return result;
+        }
         async function partition(arr, f) {
             const yes = [];
             const no = [];
@@ -212,6 +285,26 @@ export var Arr;
         }
         async function all(arr, f) {
             return !some(arr, async (t, i) => !(await f(t, i)));
+        }
+        async function maxBy(arr, f) {
+            let res = undefined;
+            forEach(arr, async (element, index) => {
+                const value = await f(element);
+                if (res === undefined || res.value < value) {
+                    res = { element, index, value };
+                }
+            });
+            return res;
+        }
+        async function minBy(arr, f) {
+            let res = undefined;
+            forEach(arr, async (element, index) => {
+                const value = await f(element);
+                if (res === undefined || res.value > value) {
+                    res = { element, index, value };
+                }
+            });
+            return res;
         }
         async function toObject(keys, val) {
             const result = {};
@@ -1410,7 +1503,7 @@ export var Str;
             ],
         };
         static start(steps = Obj.random(Spinner.format).value) {
-            if (process.stdout.isTTY === false)
+            if (typeof process.stdout.getWindowSize !== "function")
                 throw "Not a TTY console, please use 'Timer.format.NoTTY'";
             return new Spinner(steps);
         }
@@ -1547,7 +1640,8 @@ export var Str;
             }
         }
         function start(format = new NoTTY()) {
-            if (format.requiresTTY() === true && process.stdout.isTTY === false)
+            if (format.requiresTTY() === true &&
+                typeof process.stdout.getWindowSize !== "function")
                 throw "Not a TTY console, please use 'Timer.format.NoTTY'";
             return new Timer(format);
         }
@@ -1814,4 +1908,122 @@ export var Str;
         }));
     }
     Str.asciiTable = asciiTable;
+    Str.lowercase = "abcdefghijklmnopqrstuvwxyz";
+    Str.uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    Str.digits = "0123456789";
+    Str.underscore = "_";
+    Str.dash = "-";
+    Str.filename = Str.lowercase + Str.uppercase + Str.digits + Str.underscore + Str.dash;
+    Str.all = Str.lowercase + Str.uppercase + Str.digits + Str.underscore + Str.dash;
+    function generateString(length, ...alphabets) {
+        const alphabet = alphabets.join("");
+        const result = new Array(length);
+        for (let i = 0; i < length; i++) {
+            result.push(alphabet.charAt(Math.floor(Math.random() * alphabet.length)));
+        }
+        return result.join("");
+    }
+    Str.generateString = generateString;
+    function partition(str, radix) {
+        const index = str.indexOf(radix);
+        if (index < 0)
+            return [str, ""];
+        return [str.substring(0, index), str.substring(index + radix.length)];
+    }
+    Str.partition = partition;
+    function toFolderName(str) {
+        return str.toLowerCase().replace(/[^a-z0-9\-_]/g, "-");
+    }
+    Str.toFolderName = toFolderName;
+    function list(strs) {
+        return strs.length <= 2
+            ? strs.join(" and ")
+            : Arr.Sync.map(strs, (e) => e + ", ", { last: (e) => "and " + e }).join("");
+    }
+    Str.list = list;
+    function plural(n, word) {
+        return word + (n !== 1 ? "s" : "");
+    }
+    Str.plural = plural;
+    function order(n) {
+        return n + (["st", "nd", "rd"][n - 1] || "th");
+    }
+    Str.order = order;
 })(Str || (Str = {}));
+export function semanticVersionLessThan(old, new_) {
+    const os = old.split(".");
+    const ns = new_.split(".");
+    if (+os[0] < +ns[0])
+        return true;
+    else if (+os[0] > +ns[0])
+        return false;
+    else if (+os[1] < +ns[1])
+        return true;
+    else if (+os[1] > +ns[1])
+        return false;
+    else if (+os[2] < +ns[2])
+        return true;
+    return false;
+}
+// export class PathTo {
+//   constructor(private readonly path: string) {}
+//   with(folder: string) {
+//     return new PathTo(join(this.path, folder));
+//   }
+//   last() {
+//     return basename(this.path);
+//   }
+//   toString() {
+//     return this.path;
+//   }
+// }
+// export function getFiles(
+//   path: PathTo,
+//   options: {
+//     files?: boolean;
+//     folders?: boolean;
+//     exclude?: RegExp;
+//     recursive?: boolean;
+//   }
+// ): Promise<string[]> {
+//   return getFiles_internal(path, "", {
+//     files: options?.files !== undefined ? options.files : true,
+//     folders: options?.folders !== undefined ? options.folders : true,
+//     exclude: options?.exclude,
+//     recursive: options?.recursive !== undefined ? options.recursive : false,
+//   });
+// }
+// async function getFiles_internal(
+//   path: PathTo,
+//   prefix: string,
+//   options: {
+//     files: boolean;
+//     folders: boolean;
+//     exclude: RegExp | undefined;
+//     recursive: boolean;
+//   }
+// ): Promise<string[]> {
+//   if (!existsSync(path.toString())) return [];
+//   return await Arr.Async.flatMap(
+//     readdir(path.toString(), { withFileTypes: true }),
+//     async (x) => {
+//       const result: string[] =
+//         x.isDirectory() && options.recursive
+//           ? await getFiles_internal(
+//               path.with(x.name),
+//               prefix + x.name + "/",
+//               options
+//             )
+//           : [];
+//       if (
+//         options.exclude?.test(x.name) !== true &&
+//         ((x.isDirectory() &&
+//           options.folders === true &&
+//           !x.name.startsWith(".")) ||
+//           (!x.isDirectory() && options.files === true))
+//       )
+//         result.push(prefix + x.name);
+//       return result;
+//     }
+//   );
+// }

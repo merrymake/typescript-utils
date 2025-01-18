@@ -1,6 +1,6 @@
 {
   "name": "@merrymake/utils",
-  "version": "8.0.2",
+  "version": "8.1.0",
   "description": "This is just a bag of nice little functions that we use often.",
   "type": "module",
   "main": "./index.js",

@@ -1,4 +1,7 @@
 import { Arr, is, Obj, sleep, Str, UnitType, valueType } from "./index.js";
+console.log(Str.list(["red"])); // red
+console.log(Str.list(["red", "green"])); // red and green
+console.log(Str.list(["red", "green", "yellow"])); // red, green, and yellow
 const Stages = valueType()({
     baby: [0, 0],
     child: [1, 12],

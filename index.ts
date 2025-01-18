@@ -17,6 +17,14 @@ export const HOURS_IN_SECONDS = 3_600;
 export const DAYS_IN_SECONDS = 86_400;
 export const WEEKS_IN_SECONDS = 604_800;
 
+export const BYTES = 1;
+export const KILOBYTES = 1_024;
+export const MEGABYTES = 1_048_576;
+export const GIGABYTES = 1_073_741_824;
+export const TERABYTES = 1_099_511_627_776;
+export const PETABYTES = 1_125_899_906_842_624;
+// export const EXABYTES = 1_152_921_504_606_846_976;
+
 /**
  * Promise.all([4, 3]); // BROKEN
  * Promise_all([4, 3]); // Much nicer
@@ -89,6 +97,30 @@ export namespace Arr {
       });
       return result;
     }
+    export function flatMap<A, B>(
+      arr: readonly A[],
+      f: (s: A, i: number) => B[],
+      actions?: {
+        first?: (s: A) => B[];
+        last?: (s: A) => B[];
+        ends?: (s: A) => B[];
+      }
+    ) {
+      const result: B[] = [];
+      forEach(arr, (v, i) => {
+        if (actions?.first !== undefined && i === 0)
+          result.push(...actions?.first(v));
+        else if (actions?.last !== undefined && i === arr.length - 1)
+          result.push(...actions?.last(v));
+        else if (
+          actions?.ends !== undefined &&
+          (i === 0 || i === arr.length - 1)
+        )
+          result.push(...actions?.ends(v));
+        else result.push(...f(arr[i], i));
+      });
+      return result;
+    }
     export function partition<T>(
       arr: readonly T[],
       f: (_: T, i: number) => boolean
@@ -141,6 +173,47 @@ export namespace Arr {
     export function all<T>(arr: readonly T[], f: (_: T, i: number) => boolean) {
       return !some(arr, (t, i) => !f(t, i));
     }
+    export function reduce<A, B>(
+      arr: readonly A[],
+      f: (acc: B, s: A, i: number) => B,
+      base: B
+    ) {
+      let accumulator: B = base;
+      forEach(arr, (v, i) => {
+        accumulator = f(accumulator, arr[i], i);
+      });
+      return accumulator;
+    }
+    export function maxBy<T>(
+      arr: readonly T[],
+      f: (t: T) => number
+    ): { element: T; value: number; index: number } | undefined {
+      let res: { element: T; index: number; value: number } | undefined =
+        undefined;
+      forEach(arr, (element, index) => {
+        const value = f(element);
+        if (res === undefined || res.value < value) {
+          res = { element, index, value };
+        }
+      });
+      return res;
+    }
+    export function minBy<T>(
+      arr: readonly T[],
+      f: (t: T) => number
+    ): { element: T; value: number; index: number } | undefined {
+      let res: { element: T; index: number; value: number } | undefined =
+        undefined;
+      forEach(arr, (element, index) => {
+        const value = f(element);
+        if (res === undefined || res.value > value) {
+          res = { element, index, value };
+        }
+      });
+      return res;
+    }
+    export const max = (arr: number[]) => maxBy(arr, (x) => x);
+    export const min = (arr: number[]) => minBy(arr, (x) => x);
     export function toObject<K extends readonly string[], T>(
       keys: K,
       val: (k: K[number]) => T
@@ -155,11 +228,14 @@ export namespace Arr {
       findAny,
       forEach,
       map,
+      flatMap,
       partition,
       filter,
       zip,
       some,
       all,
+      maxBy,
+      minBy,
       toObject,
     };
     async function worker(tasks: (() => Promise<boolean>)[]) {
@@ -220,6 +296,30 @@ export namespace Arr {
       });
       return result;
     }
+    async function flatMap<A, B>(
+      arr: readonly A[],
+      f: (s: A, i: number) => Promise<B[]>,
+      actions?: {
+        first?: (s: A) => Promise<B[]>;
+        last?: (s: A) => Promise<B[]>;
+        ends?: (s: A) => Promise<B[]>;
+      }
+    ) {
+      const result: B[] = [];
+      await forEach(arr, async (v, i) => {
+        if (actions?.first !== undefined && i === 0)
+          result.push(...(await actions.first(v)));
+        else if (actions?.last !== undefined && i === arr.length - 1)
+          result.push(...(await actions.last(v)));
+        else if (
+          actions?.ends !== undefined &&
+          (i === 0 || i === arr.length - 1)
+        )
+          result.push(...(await actions.ends(v)));
+        else result.push(...(await f(arr[i], i)));
+      });
+      return result;
+    }
     async function partition<T>(
       arr: readonly T[],
       f: (_: T) => Promise<boolean>
@@ -273,6 +373,34 @@ export namespace Arr {
       f: (_: T, i: number) => Promise<boolean>
     ) {
       return !some(arr, async (t, i) => !(await f(t, i)));
+    }
+    async function maxBy<T>(
+      arr: readonly T[],
+      f: (t: T) => Promise<number>
+    ): Promise<{ element: T; value: number; index: number } | undefined> {
+      let res: { element: T; index: number; value: number } | undefined =
+        undefined;
+      forEach(arr, async (element, index) => {
+        const value = await f(element);
+        if (res === undefined || res.value < value) {
+          res = { element, index, value };
+        }
+      });
+      return res;
+    }
+    async function minBy<T>(
+      arr: readonly T[],
+      f: (t: T) => Promise<number>
+    ): Promise<{ element: T; value: number; index: number } | undefined> {
+      let res: { element: T; index: number; value: number } | undefined =
+        undefined;
+      forEach(arr, async (element, index) => {
+        const value = await f(element);
+        if (res === undefined || res.value > value) {
+          res = { element, index, value };
+        }
+      });
+      return res;
     }
     async function toObject<K extends readonly string[], T>(
       keys: K,
@@ -1549,7 +1677,7 @@ export namespace Str {
       ],
     } as const;
     static start(steps: readonly string[] = Obj.random(Spinner.format).value) {
-      if (process.stdout.isTTY === false)
+      if (typeof process.stdout.getWindowSize !== "function")
         throw "Not a TTY console, please use 'Timer.format.NoTTY'";
       return new Spinner(steps);
     }
@@ -1676,7 +1804,10 @@ export namespace Str {
       }
     }
     export function start(format = new NoTTY()) {
-      if (format.requiresTTY() === true && process.stdout.isTTY === false)
+      if (
+        format.requiresTTY() === true &&
+        typeof process.stdout.getWindowSize !== "function"
+      )
         throw "Not a TTY console, please use 'Timer.format.NoTTY'";
       return new Timer(format);
     }
@@ -2007,4 +2138,121 @@ export namespace Str {
       )
     );
   }
+
+  export const lowercase = "abcdefghijklmnopqrstuvwxyz";
+  export const uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  export const digits = "0123456789";
+  export const underscore = "_";
+  export const dash = "-";
+  export const filename = lowercase + uppercase + digits + underscore + dash;
+  export const all = lowercase + uppercase + digits + underscore + dash;
+  export function generateString(
+    length: number,
+    ...alphabets: [string, ...string[]]
+  ) {
+    const alphabet = alphabets.join("");
+    const result = new Array(length);
+    for (let i = 0; i < length; i++) {
+      result.push(alphabet.charAt(Math.floor(Math.random() * alphabet.length)));
+    }
+    return result.join("");
+  }
+
+  export function partition(str: string, radix: string) {
+    const index = str.indexOf(radix);
+    if (index < 0) return [str, ""];
+    return [str.substring(0, index), str.substring(index + radix.length)];
+  }
+
+  export function toFolderName(str: string) {
+    return str.toLowerCase().replace(/[^a-z0-9\-_]/g, "-");
+  }
+
+  export function list(strs: string[]) {
+    return strs.length <= 2
+      ? strs.join(" and ")
+      : Arr.Sync.map(strs, (e) => e + ", ", { last: (e) => "and " + e }).join(
+          ""
+        );
+  }
+  export function plural(n: number, word: string) {
+    return word + (n !== 1 ? "s" : "");
+  }
+  export function order(n: number) {
+    return n + (["st", "nd", "rd"][n - 1] || "th");
+  }
 }
+
+export function semanticVersionLessThan(old: string, new_: string) {
+  const os = old.split(".");
+  const ns = new_.split(".");
+  if (+os[0] < +ns[0]) return true;
+  else if (+os[0] > +ns[0]) return false;
+  else if (+os[1] < +ns[1]) return true;
+  else if (+os[1] > +ns[1]) return false;
+  else if (+os[2] < +ns[2]) return true;
+  return false;
+}
+
+// export class PathTo {
+//   constructor(private readonly path: string) {}
+//   with(folder: string) {
+//     return new PathTo(join(this.path, folder));
+//   }
+//   last() {
+//     return basename(this.path);
+//   }
+//   toString() {
+//     return this.path;
+//   }
+// }
+// export function getFiles(
+//   path: PathTo,
+//   options: {
+//     files?: boolean;
+//     folders?: boolean;
+//     exclude?: RegExp;
+//     recursive?: boolean;
+//   }
+// ): Promise<string[]> {
+//   return getFiles_internal(path, "", {
+//     files: options?.files !== undefined ? options.files : true,
+//     folders: options?.folders !== undefined ? options.folders : true,
+//     exclude: options?.exclude,
+//     recursive: options?.recursive !== undefined ? options.recursive : false,
+//   });
+// }
+// async function getFiles_internal(
+//   path: PathTo,
+//   prefix: string,
+//   options: {
+//     files: boolean;
+//     folders: boolean;
+//     exclude: RegExp | undefined;
+//     recursive: boolean;
+//   }
+// ): Promise<string[]> {
+//   if (!existsSync(path.toString())) return [];
+//   return await Arr.Async.flatMap(
+//     readdir(path.toString(), { withFileTypes: true }),
+//     async (x) => {
+//       const result: string[] =
+//         x.isDirectory() && options.recursive
+//           ? await getFiles_internal(
+//               path.with(x.name),
+//               prefix + x.name + "/",
+//               options
+//             )
+//           : [];
+//       if (
+//         options.exclude?.test(x.name) !== true &&
+//         ((x.isDirectory() &&
+//           options.folders === true &&
+//           !x.name.startsWith(".")) ||
+//           (!x.isDirectory() && options.files === true))
+//       )
+//         result.push(prefix + x.name);
+//       return result;
+//     }
+//   );
+// }
