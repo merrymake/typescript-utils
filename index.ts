@@ -121,14 +121,34 @@ export namespace Arr {
       });
       return result;
     }
-    export function partition<T>(
+    export function partition<
+      T,
+      Yes extends string = "yes",
+      No extends string = "no"
+    >(
       arr: readonly T[],
-      f: (_: T, i: number) => boolean
-    ) {
-      const yes: T[] = [];
-      const no: T[] = [];
-      forEach(arr, (t, i) => (f(t, i) === true ? yes.push(t) : no.push(t)));
-      return { yes, no };
+      f: (_: T, i: number) => boolean,
+      opts?: {
+        yesField?: Yes;
+        noField?: No;
+      }
+    ): { [k in Yes]: T[] } & {
+      [k in No]: T[];
+    } {
+      const yf: Yes = opts?.yesField || ("yes" as Yes);
+      const nf: No = opts?.noField || ("no" as No);
+      const result: { [k in Yes]: T[] } & {
+        [k in No]: T[];
+      } = (() => {
+        const result: any = {};
+        result[yf] = [];
+        result[nf] = [];
+        return result;
+      })();
+      forEach(arr, (k, i) =>
+        f(k, i) === true ? result[yf].push(k) : result[nf].push(k)
+      );
+      return result;
     }
     export function filter<T>(
       arr: readonly T[],
@@ -212,8 +232,8 @@ export namespace Arr {
       });
       return res;
     }
-    export const max = (arr: number[]) => maxBy(arr, (x) => x);
-    export const min = (arr: number[]) => minBy(arr, (x) => x);
+    export const max = (arr: readonly number[]) => maxBy(arr, (x) => x);
+    export const min = (arr: readonly number[]) => minBy(arr, (x) => x);
     export function toObject<K extends readonly string[], T>(
       keys: K,
       val: (k: K[number]) => T
@@ -320,16 +340,36 @@ export namespace Arr {
       });
       return result;
     }
-    async function partition<T>(
+    async function partition<
+      T,
+      Yes extends string = "yes",
+      No extends string = "no"
+    >(
       arr: readonly T[],
-      f: (_: T) => Promise<boolean>
-    ) {
-      const yes: T[] = [];
-      const no: T[] = [];
-      await forEach(arr, async (t) =>
-        (await f(t)) === true ? yes.push(t) : no.push(t)
+      f: (_: T, i: number) => Promise<boolean>,
+      opts?: {
+        yesField?: Yes;
+        noField?: No;
+      }
+    ): Promise<
+      { [k in Yes]: T[] } & {
+        [k in No]: T[];
+      }
+    > {
+      const yf: Yes = opts?.yesField || ("yes" as Yes);
+      const nf: No = opts?.noField || ("no" as No);
+      const result: { [k in Yes]: T[] } & {
+        [k in No]: T[];
+      } = (() => {
+        const result: any = {};
+        result[yf] = [];
+        result[nf] = [];
+        return result;
+      })();
+      await forEach(arr, async (k, i) =>
+        (await f(k, i)) === true ? result[yf].push(k) : result[nf].push(k)
       );
-      return { yes, no };
+      return result;
     }
     async function filter<T>(arr: readonly T[], f: (_: T) => Promise<boolean>) {
       return (await partition(arr, f)).yes;
@@ -452,16 +492,29 @@ export namespace Obj {
       forEach(o, (k) => (res[k] = f(k, o[k])));
       return res as any;
     }
-    export function partition<T extends { [k: string]: unknown }>(
+    export function partition<
+      T extends { [k: string]: unknown },
+      Yes extends string = "yes",
+      No extends string = "no"
+    >(
       o: T,
-      f: (key: keyof T & string, val: T[keyof T]) => boolean
-    ): { yes: { [k in keyof T]?: T[k] }; no: { [k in keyof T]?: T[k] } } {
-      const yes: { [k in keyof T]?: T[k] } = {};
-      const no: { [k in keyof T]?: T[k] } = {};
+      f: (key: keyof T & string, val: T[keyof T]) => boolean,
+      opts?: {
+        yesField?: Yes;
+        noField?: No;
+      }
+    ): { [k in Yes]: { [k in keyof T]?: T[k] } } & {
+      [k in No]: { [k in keyof T]?: T[k] };
+    } {
+      const yf = opts?.yesField || "yes";
+      const nf = opts?.noField || "no";
+      const result: any = {};
+      result[yf] = {};
+      result[nf] = {};
       forEach(o, (k) =>
-        f(k, o[k]) === true ? (yes[k] = o[k]) : (no[k] = o[k])
+        f(k, o[k]) === true ? (result[yf][k] = o[k]) : (result[nf][k] = o[k])
       );
-      return { yes, no };
+      return result;
     }
     export function filter<T extends { [k: string]: unknown }>(
       o: T,
@@ -481,6 +534,14 @@ export namespace Obj {
     ) {
       return !some(o, (t, i) => !f(t, i));
     }
+    export function toArray<T extends { [k: string]: unknown }, B>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => B
+    ) {
+      const result: B[] = [];
+      forEach(o, (k, v) => result.push(f(k, v)));
+      return result;
+    }
   }
   export function Async(maxConcurrent = 1) {
     return {
@@ -491,6 +552,7 @@ export namespace Obj {
       filter,
       some,
       all,
+      toArray,
     };
     function findAny<T extends { [k: string]: unknown }>(
       o: T,
@@ -512,19 +574,33 @@ export namespace Obj {
       await forEach(o, async (k) => (res[k] = await f(k, o[k])));
       return res as any;
     }
-    async function partition<T extends { [k: string]: unknown }>(
+    async function partition<
+      T extends { [k: string]: unknown },
+      Yes extends string = "yes",
+      No extends string = "no"
+    >(
       o: T,
-      f: (key: keyof T & string, val: T[keyof T]) => Promise<boolean>
-    ): Promise<{
-      yes: { [k in keyof T]?: T[k] };
-      no: { [k in keyof T]?: T[k] };
-    }> {
-      const yes: { [k in keyof T]?: T[k] } = {};
-      const no: { [k in keyof T]?: T[k] } = {};
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<boolean>,
+      opts?: {
+        yesField?: Yes;
+        noField?: No;
+      }
+    ): Promise<
+      { [k in Yes]: { [k in keyof T]?: T[k] } } & {
+        [k in No]: { [k in keyof T]?: T[k] };
+      }
+    > {
+      const yf = opts?.yesField || "yes";
+      const nf = opts?.noField || "no";
+      const result: any = {};
+      result[yf] = {};
+      result[nf] = {};
       await forEach(o, async (k) =>
-        (await f(k, o[k])) === true ? (yes[k] = o[k]) : (no[k] = o[k])
+        (await f(k, o[k])) === true
+          ? (result[yf][k] = o[k])
+          : (result[nf][k] = o[k])
       );
-      return { yes, no };
+      return result;
     }
     async function filter<T extends { [k: string]: unknown }>(
       o: T,
@@ -543,6 +619,14 @@ export namespace Obj {
       f: (key: keyof T & string, val: T[keyof T]) => Promise<boolean>
     ) {
       return !(await some(o, async (t, i) => !(await f(t, i))));
+    }
+    async function toArray<T extends { [k: string]: unknown }, B>(
+      o: T,
+      f: (key: keyof T & string, val: T[keyof T]) => Promise<B>
+    ) {
+      const result: B[] = [];
+      await forEach(o, async (k, v) => result.push(await f(k, v)));
+      return result;
     }
   }
 }
@@ -2052,7 +2136,7 @@ export namespace Str {
   class Table {
     private rows: string[] = [];
     constructor(
-      columns: string[],
+      columns: readonly string[],
       private config: [number, (s: string) => string][]
     ) {
       this.addRow(...columns);
@@ -2064,7 +2148,7 @@ export namespace Str {
       );
       return this;
     }
-    addRow(...values: string[]) {
+    addRow(...values: readonly string[]) {
       this.rows.push(
         Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(" │ ")
       );
@@ -2168,7 +2252,7 @@ export namespace Str {
     return str.toLowerCase().replace(/[^a-z0-9\-_]/g, "-");
   }
 
-  export function list(strs: string[]) {
+  export function list(strs: readonly string[]) {
     return strs.length <= 2
       ? strs.join(" and ")
       : Arr.Sync.map(strs, (e) => e + ", ", { last: (e) => "and " + e }).join(

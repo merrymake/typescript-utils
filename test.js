@@ -1,4 +1,10 @@
 import { Arr, is, Obj, sleep, Str, UnitType, valueType } from "./index.js";
+console.log(Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6)); // {yes: {b:10}, no: {a:5}}
+const alfa = Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6, {
+    yesField: "big",
+    noField: "small",
+});
+console.log(alfa); // {big: {b:10}, small: {a:5}}
 console.log(Str.list(["red"])); // red
 console.log(Str.list(["red", "green"])); // red and green
 console.log(Str.list(["red", "green", "yellow"])); // red, green, and yellow

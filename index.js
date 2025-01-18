@@ -101,11 +101,17 @@ export var Arr;
             return result;
         }
         Sync.flatMap = flatMap;
-        function partition(arr, f) {
-            const yes = [];
-            const no = [];
-            forEach(arr, (t, i) => (f(t, i) === true ? yes.push(t) : no.push(t)));
-            return { yes, no };
+        function partition(arr, f, opts) {
+            const yf = opts?.yesField || "yes";
+            const nf = opts?.noField || "no";
+            const result = (() => {
+                const result = {};
+                result[yf] = [];
+                result[nf] = [];
+                return result;
+            })();
+            forEach(arr, (k, i) => f(k, i) === true ? result[yf].push(k) : result[nf].push(k));
+            return result;
         }
         Sync.partition = partition;
         function filter(arr, f) {
@@ -252,11 +258,17 @@ export var Arr;
             });
             return result;
         }
-        async function partition(arr, f) {
-            const yes = [];
-            const no = [];
-            await forEach(arr, async (t) => (await f(t)) === true ? yes.push(t) : no.push(t));
-            return { yes, no };
+        async function partition(arr, f, opts) {
+            const yf = opts?.yesField || "yes";
+            const nf = opts?.noField || "no";
+            const result = (() => {
+                const result = {};
+                result[yf] = [];
+                result[nf] = [];
+                return result;
+            })();
+            await forEach(arr, async (k, i) => (await f(k, i)) === true ? result[yf].push(k) : result[nf].push(k));
+            return result;
         }
         async function filter(arr, f) {
             return (await partition(arr, f)).yes;
@@ -345,11 +357,14 @@ export var Obj;
             return res;
         }
         Sync.map = map;
-        function partition(o, f) {
-            const yes = {};
-            const no = {};
-            forEach(o, (k) => f(k, o[k]) === true ? (yes[k] = o[k]) : (no[k] = o[k]));
-            return { yes, no };
+        function partition(o, f, opts) {
+            const yf = opts?.yesField || "yes";
+            const nf = opts?.noField || "no";
+            const result = {};
+            result[yf] = {};
+            result[nf] = {};
+            forEach(o, (k) => f(k, o[k]) === true ? (result[yf][k] = o[k]) : (result[nf][k] = o[k]));
+            return result;
         }
         Sync.partition = partition;
         function filter(o, f) {
@@ -364,6 +379,12 @@ export var Obj;
             return !some(o, (t, i) => !f(t, i));
         }
         Sync.all = all;
+        function toArray(o, f) {
+            const result = [];
+            forEach(o, (k, v) => result.push(f(k, v)));
+            return result;
+        }
+        Sync.toArray = toArray;
     })(Sync = Obj.Sync || (Obj.Sync = {}));
     function Async(maxConcurrent = 1) {
         return {
@@ -374,6 +395,7 @@ export var Obj;
             filter,
             some,
             all,
+            toArray,
         };
         function findAny(o, f) {
             return Arr.Async(maxConcurrent).findAny(keys(o), (k) => f(k, o[k]));
@@ -386,11 +408,16 @@ export var Obj;
             await forEach(o, async (k) => (res[k] = await f(k, o[k])));
             return res;
         }
-        async function partition(o, f) {
-            const yes = {};
-            const no = {};
-            await forEach(o, async (k) => (await f(k, o[k])) === true ? (yes[k] = o[k]) : (no[k] = o[k]));
-            return { yes, no };
+        async function partition(o, f, opts) {
+            const yf = opts?.yesField || "yes";
+            const nf = opts?.noField || "no";
+            const result = {};
+            result[yf] = {};
+            result[nf] = {};
+            await forEach(o, async (k) => (await f(k, o[k])) === true
+                ? (result[yf][k] = o[k])
+                : (result[nf][k] = o[k]));
+            return result;
         }
         async function filter(o, f) {
             return (await partition(o, f)).yes;
@@ -400,6 +427,11 @@ export var Obj;
         }
         async function all(o, f) {
             return !(await some(o, async (t, i) => !(await f(t, i))));
+        }
+        async function toArray(o, f) {
+            const result = [];
+            await forEach(o, async (k, v) => result.push(await f(k, v)));
+            return result;
         }
     }
     Obj.Async = Async;
