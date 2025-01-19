@@ -671,7 +671,7 @@ export function is<K extends (keyof IsTypeHelper)[]>(
   v: unknown,
   ...ts: K
 ): v is IsTypeHelper[K[number]] {
-  return Arr.Sync.all(ts, (k) => checkers[k](v));
+  return Arr.Sync.some(ts, (k) => checkers[k](v));
 }
 
 type ValueTypeCheck<C> = <K extends string>(x: Record<K, C>) => Record<K, C>;

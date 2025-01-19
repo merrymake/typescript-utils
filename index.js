@@ -455,7 +455,7 @@ const checkers = {
     object: (v) => v !== null && typeof v === "object",
 };
 export function is(v, ...ts) {
-    return Arr.Sync.all(ts, (k) => checkers[k](v));
+    return Arr.Sync.some(ts, (k) => checkers[k](v));
 }
 /**
  * Specify type of elements without loosing field names.

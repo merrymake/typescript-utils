@@ -1,4 +1,5 @@
 import { Arr, is, Obj, sleep, Str, UnitType, valueType } from "./index.js";
+console.log(Obj.Sync.map({ a: 5, b: 10 }, (k, v) => "a"));
 console.log(Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6)); // {yes: {b:10}, no: {a:5}}
 const alfa = Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6, {
     yesField: "big",
@@ -41,3 +42,4 @@ const v = "hi";
 is(v, "array") && v.join("");
 is(v, "string") && v.substring(0);
 is(v, "object") && v.a;
+is(v, "string", "array") && v.includes("a");
