@@ -23,13 +23,21 @@ export const TERABYTES = 1_099_511_627_776;
 export const PETABYTES = 1_125_899_906_842_624;
 // export const EXABYTES = 1_152_921_504_606_846_976;
 /**
- * Promise.all([4, 3]); // BROKEN
- * Promise_all([4, 3]); // Much nicer
+ * ```Typescript
+ * Promise.all(4, 3); // Should error, but doesn't
+ * Promise_all(4, 3); // Should error, and does
+ * ```
+ *
+ * If you want to use the result of the promises:
+ *
+ * ```Typescript
+ * const [a, b] = await Promise_all(aPromise, bPromise).then();
+ * ```
  *
  * @param arr
  * @returns
  */
-export function Promise_all(arr) {
+export function Promise_all(...arr) {
     return Promise.all(arr);
 }
 export function sleep(ms) {
@@ -219,7 +227,7 @@ export var Arr;
                     return false;
                 }
             });
-            await Promise_all(new Array(maxConcurrent).fill(0).map((_) => worker(tasks))).then();
+            await Promise_all(...new Array(maxConcurrent).fill(0).map((_) => worker(tasks))).then();
             return result;
         }
         async function forEach(arr, f) {
@@ -1818,8 +1826,9 @@ export var Str;
                             : insert);
                         invisible[prefix].push(...invs);
                     }
-                    words.splice(i, 1, ...indent, ...(indentIndex > 0 || ["*", "-"].includes(words[0])
-                        ? ["", ""]
+                    words.splice(i, 1, ...indent, ...(indentIndex > 0 ||
+                        /^([*\-]|[0-9a-z]+[^ ]?)$/.test(words[indentIndex])
+                        ? new Array(words[indentIndex].length + 1).fill("")
                         : []), words[i].substring(iChars));
                     result.push([]);
                     widthLeft = width - prefixLength;
@@ -1981,21 +1990,243 @@ export var Str;
         return n + (["st", "nd", "rd"][n - 1] || "th");
     }
     Str.order = order;
+    function semanticVersionLessThan(old, new_) {
+        const os = old.split(".");
+        const ns = new_.split(".");
+        if (+os[0] < +ns[0])
+            return true;
+        else if (+os[0] > +ns[0])
+            return false;
+        else if (+os[1] < +ns[1])
+            return true;
+        else if (+os[1] > +ns[1])
+            return false;
+        else if (+os[2] < +ns[2])
+            return true;
+        return false;
+    }
+    Str.semanticVersionLessThan = semanticVersionLessThan;
 })(Str || (Str = {}));
-export function semanticVersionLessThan(old, new_) {
-    const os = old.split(".");
-    const ns = new_.split(".");
-    if (+os[0] < +ns[0])
-        return true;
-    else if (+os[0] > +ns[0])
-        return false;
-    else if (+os[1] < +ns[1])
-        return true;
-    else if (+os[1] > +ns[1])
-        return false;
-    else if (+os[2] < +ns[2])
-        return true;
-    return false;
+/**
+ * Normally, you cannot have varargs at the beginning of a parameter list.
+ * This function solves that.
+ *
+ * ### Example 1: Mixed types
+ *
+ * ```Typescript
+ * const getEnvvarNumber = varArgsBeforeOptional(
+ *   (a): a is number => typeof a === "number",
+ *   (vars: string[], def: number | undefined) => {
+ *     const v = vars.find((v) => process.env[v] !== undefined);
+ *     return v !== undefined ? +v : def;
+ *   }
+ * );
+ * getEnvvarNumber(); // default is undefined
+ * getEnvvarNumber("ENVVAR1"); // default is undefined
+ * getEnvvarNumber("ENVVAR1", 42);
+ * getEnvvarNumber("ENVVAR1", "ENVVAR2"); // default is undefined
+ * getEnvvarNumber("ENVVAR1", "ENVVAR2", 42);
+ * getEnvvarNumber("ENVVAR1", 42, "ENVVAR2"); // compile-error
+ * ```
+ *
+ * ### Example 2: The same type
+ *
+ * ```Typescript
+ * const getEnvvar = varArgsBeforeOptional(
+ *   (a): a is string => !/^[A-Z_]*$/.test(a),
+ *   (vars: string[], def: string | undefined) => {
+ *     return vars.find((v) => process.env[v] !== undefined) || def;
+ *   }
+ * );
+ * getEnvvar(); // default is undefined
+ * getEnvvar("ENVVAR1"); // default is undefined
+ * getEnvvar("ENVVAR1", "default");
+ * getEnvvar("ENVVAR1", "ENVVAR2"); // default is undefined
+ * getEnvvar("ENVVAR1", "ENVVAR2", "default");
+ * getEnvvar("ENVVAR1", "default", "ENVVAR2"); // default is undefined
+ * ```
+ *
+ * @param isOpt how to recognize the optional argument
+ * @param f your function
+ * @returns your function with varargs
+ */
+export function varArgsBeforeOptional(isOpt, f) {
+    return (...v) => {
+        const last = v[v.length - 1];
+        if (last !== undefined && isOpt(last)) {
+            return f(v.slice(0, v.length - 1), last);
+        }
+        else {
+            return f(v, undefined);
+        }
+    };
+}
+/**
+ * You cannot have varargs at the beginning of a parameter list.
+ *
+ * ### Normal Typescript: Doesn't compile
+ *
+ * ```Typescript
+ * function ThrowsNormal(...es: string[], f: () => void) { ... }
+ * ThrowsNormal(() => { ... });
+ * ThrowsNormal("NotFound", () => { ... });
+ * ThrowsNormal("NotFound", "IOException", () => { ... });
+ * ```
+ *
+ * You can hack this by putting your arguments at the end, but it sucks.
+ * Especially, if you want any parameters after a long function.
+ *
+ * ### Hack: Bad
+ * ```Typescript
+ * function ThrowsNormalHack(f: () => void, ...es: string[]) { ... }
+ * const foo2 = ThrowsNormalHack(() => {
+ *   ...
+ * });
+ * const bar2 = ThrowsNormalHack(() => {
+ *   ...
+ * }, "NotFound");
+ * const baz2 = ThrowsNormalHack(
+ *   () => {
+ *     ...
+ *   },
+ *   "NotFound",
+ *   "IOException"
+ * );
+ * ```
+ *
+ * This function solves this.
+ *
+ * ### Example: Solution
+ *
+ * ```Typescript
+ * const ThrowsNew = varArgsFirst((es: string[], f: () => void) => { ... });
+ * const foo1 = ThrowsNew(() => {
+ *   ...
+ * });
+ * const bar1 = ThrowsNew("NotFound", () => {
+ *   ...
+ * });
+ * const baz1 = ThrowsNew("NotFound", "IOException", () => {
+ *   ...
+ * });
+ * ```
+ *
+ * @param f your function
+ * @returns your function with varargs
+ */
+export function varArgsFirst(f) {
+    return (...v) => {
+        const last = v[v.length - 1];
+        return f(v.slice(0, v.length - 1), last);
+    };
+}
+/**
+ * When we want to initialize a variable in some complex way (like using if-
+ * else or try-catch) we sometimes resolve to `let` instead of `const` (never
+ * `var`), even when the value will never change.
+ *
+ * To get around this, we can use a lambda-binding trick:
+ *
+ * ```Typescript
+ * const total = ((n) => {
+ *   return n.a;
+ * })(await slowThing());
+ * ```
+ *
+ * However, this pushes the calculation's input to the bottom, which is hard
+ * to follow. This method pulls that info to the top instead.
+ *
+ * ```Typescript
+ * const total = constify(await slowThing(), (n) => {
+ *   return n.a;
+ * });
+ * ```
+ *
+ * @param args clojure
+ * @param f initialization function
+ * @returns const value
+ */
+export function constify(...args) {
+    return args[args.length - 1](...args.slice(0, args.length - 1));
+}
+class CheckedException {
+    type;
+    data;
+    constructor(type, data) {
+        this.type = type;
+        this.data = data;
+    }
+}
+class InternalRaiser {
+    throws;
+    f;
+    constructor(throws, f) {
+        this.throws = throws;
+        this.f = f;
+    }
+    Start(a) {
+        return this.f(...a);
+    }
+}
+/**
+ * Define function that raises checked exceptions. To call it use `Start(foo)(arguments)`
+ */
+export function Raises(...e) {
+    return (f) => new InternalRaiser(e[0], f((e, data) => {
+        throw new CheckedException(e, data);
+    }));
+}
+class Catcher {
+    handler;
+    constructor(handler) {
+        this.handler = handler;
+    }
+    /**
+     * Handle another type of checked exception
+     * @param type the checked exception to catch, eg. "FileNotFound"
+     * @param handler how to handle the exception
+     * @returns a Promise that wont cause "uncaught promise rejection" from any checked exception
+     */
+    Catch(type, handler) {
+        return new Catcher((next) => this.handler((e) => {
+            if (typeof e === "object" && "type" in e && e.type === type)
+                return handler("data" in e && e.data);
+            return next(e);
+        }));
+    }
+    /**
+     * @param body code that might raise checked exceptions.
+     * @returns a Promise that wont cause "uncaught promise rejection" from any checked exception
+     */
+    Try(body) {
+        return body((func, ...a) => {
+            const prom = func.Start(a);
+            prom.catch((e) => {
+                this.handler((e) => {
+                    throw e;
+                })(e);
+            });
+            return prom;
+        }).catch((e) => { });
+    }
+}
+/**
+ * Start a Catch-Try block that can handle checked exceptions, end with `.Try()`
+ * @param type the checked exception to catch, eg. "FileNotFound"
+ * @param handler how to handle the exception
+ * @returns a Promise that wont cause "uncaught promise rejection" from any checked exception
+ */
+export function Catch(type, handler) {
+    return new Catcher((next) => (e) => next(e)).Catch(type, handler);
+}
+/**
+ * Run a function inside a Catch-Try block that handles all relevant checked exceptions.
+ * @param func a function defined with `Raises()`
+ * @param args arguments to the function
+ * @returns a Promise that wont cause "uncaught promise" from any checked exception
+ */
+export function Start(func, ...args) {
+    return func.Start(args);
 }
 // export class PathTo {
 //   constructor(private readonly path: string) {}

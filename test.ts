@@ -1,4 +1,16 @@
-import { Arr, is, Obj, sleep, Str, UnitType, valueType } from "./index.js";
+import {
+  Arr,
+  Catch,
+  is,
+  Obj,
+  Promise_all,
+  Raises,
+  sleep,
+  Start,
+  Str,
+  UnitType,
+  valueType,
+} from "./index.js";
 
 console.log(Obj.Sync.map({ a: 5, b: 10 }, (k, v) => "a"));
 
@@ -53,3 +65,35 @@ is(v, "array") && v.join("");
 is(v, "string") && v.substring(0);
 is(v, "object") && v.a;
 is(v, "string", "array") && v.includes("a");
+
+const [c, n] = await Promise_all(
+  Promise.resolve("Christian"),
+  Promise.resolve("Nico")
+).then();
+
+// Promise.all(4, 3); // Should error, but doesn't
+// Promise_all(4, 3); // Should error
+
+const failThrows = Raises("Fail")((raise) => async () => {
+  raise("Fail");
+  console.log("Unreachable");
+  return 67;
+});
+const sleepThrows = Raises()((raise) => (n: number) => {
+  return new Promise<void>((resolve) => setTimeout(() => resolve(), n));
+});
+
+(async () => {
+  await Start(sleepThrows, 1000);
+
+  await Catch("Fail", () => {
+    console.log("Caught fail 1");
+  }).Try(async (start) => {
+    await start(failThrows);
+  });
+  await Catch("Fail", () => {
+    console.log("Caught fail 2");
+  }).Try(async (start) => {
+    /* no await */ start(failThrows); // This fails in normal Typescript
+  });
+})();
