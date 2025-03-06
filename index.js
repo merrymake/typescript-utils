@@ -40,6 +40,9 @@ export const PETABYTES = 1_125_899_906_842_624;
 export function Promise_all(...arr) {
     return Promise.all(arr);
 }
+export function randomElement(arr, rng = Math.random) {
+    return arr.length < 1 ? arr[0] : arr[~~(arr.length * rng())];
+}
 export function sleep(ms) {
     return new Promise((resolve) => {
         setTimeout(() => resolve(), ms);
@@ -340,6 +343,10 @@ export var Obj;
         return Object.keys(o);
     }
     Obj.keys = keys;
+    function hasKey(l, obj) {
+        return l in obj;
+    }
+    Obj.hasKey = hasKey;
     function random(o) {
         const key = Arr.random(keys(o)).value;
         return { value: o[key], key };
@@ -501,6 +508,7 @@ export function is(v, ...ts) {
  * Which has the fields (GOOD), and they are pairs (GOOD)
  */
 export const valueType = () => ((x) => x);
+export const tuple = (...x) => x;
 export const UnitType = valueType()({
     Duration: [
         [1, "ms"],
@@ -1865,11 +1873,16 @@ export var Str;
     }
     Str.padStart = (str, width, c = " ", invisibleChars = DEFAULT_INVISIBLE) => aligner((s, w) => c.repeat(w) + s)(str, width, InvisibleHand.make(invisibleChars));
     Str.padEnd = (str, width, c = " ", invisibleChars = DEFAULT_INVISIBLE) => aligner((s, w) => s + c.repeat(w))(str, width, InvisibleHand.make(invisibleChars));
-    Str.padBoth = (str, width, c = " ", invisibleChars = DEFAULT_INVISIBLE) => aligner((s, w) => {
-        const l = ~~(w / 2);
+    Str.padBoth = withOptions({
+        c: " ",
+        invisibleChars: DEFAULT_INVISIBLE,
+        margin: tuple(true, true),
+    }, (opt, str, width) => aligner((s, w) => {
+        const l = ~~((w + (opt.margin[0] ? 1 : 0) - (opt.margin[1] ? 1 : 0)) /
+            2);
         const r = w - l;
-        return " ".repeat(l) + s + " ".repeat(r);
-    })(str, width, InvisibleHand.make(invisibleChars));
+        return opt.c.repeat(l) + s + opt.c.repeat(r);
+    })(str, width, InvisibleHand.make(opt.invisibleChars)));
     Str.alignRight = Str.padStart;
     Str.alignLeft = Str.padEnd;
     Str.alignCenter = Str.padBoth;
@@ -1882,73 +1895,130 @@ export var Str;
             this.addDivider();
         }
         addDivider() {
-            this.rows.push(Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─"));
+            this.rows.push(Str.GRAY +
+                Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─") +
+                Str.NORMAL_COLOR);
             return this;
         }
         addRow(...values) {
-            this.rows.push(Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(" │ "));
+            this.rows.push(Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `));
             return this;
         }
         toString() {
             return this.rows.join("\n");
         }
     }
-    /**
-     * Used to draw pretty ascii tables. The header determines column count,
-     * width, and alignment. Use the format:
-     *
-     * ```Typescript
-     * asciiTable("Title     | Stat | Runtime_|_Unit");
-     * ```
-     *
-     * Means:
-     * - `Title` is _left_ aligned, 9 chars wide
-     * - `Stat` is _centered_, 4 chars wide
-     * - `Runtime` is _right_ aligned, 7 chars wide
-     * - `Unit` is _left_ aligned, 4 chars wide
-     *
-     * Notice: A nice benefit is that you can select the header string and see
-     * exactly how wide it will be in the console.
-     *
-     * Calling this function gives you a table object, which you can add rows to,
-     * and eventually print.
-     *
-     * @param columns
-     * @returns
-     */
-    function asciiTable(header, invisibleChars) {
-        const invisibleHand = invisibleChars === undefined ? DEFAULT_INVISIBLE : invisibleChars;
-        const columns = header.split("|");
-        return new Table(Arr.Sync.map(columns, (s) => s.substring(1, s.length - 1).trim(), {
-            first: (s) => s.substring(0, s.length - 1).trim(),
-            last: (s) => s.substring(1).trim(),
-        }), Arr.Sync.map(columns, (c) => [
-            c.length - 2,
-            (c[0] === " ") === (c[c.length - 1] === " ")
-                ? (s) => Str.alignCenter(s, c.length - 2, " ", invisibleHand)
-                : c[0] === " "
-                    ? (s) => Str.alignRight(s, c.length - 2, " ", invisibleHand)
-                    : (s) => Str.alignLeft(s, c.length - 2, " ", invisibleHand),
-        ], {
-            first: (c) => [
-                c.length - 1,
-                c[0] === " " && c[c.length - 1] === " "
-                    ? (s) => Str.alignCenter(s, c.length - 1, " ", invisibleHand)
-                    : c[c.length - 1] === " "
-                        ? (s) => Str.alignLeft(s, c.length - 1, " ", invisibleHand)
-                        : (s) => Str.alignRight(s, c.length - 1, " ", invisibleHand),
-            ],
-            last: (c) => [
-                c.length - 1,
-                c[0] === " " && c[c.length - 1] === " "
-                    ? (s) => Str.alignCenter(s, c.length - 1, " ", invisibleHand)
+    let AsciiTable;
+    (function (AsciiTable) {
+        /**
+         * Used to draw pretty ascii tables. The header determines column count,
+         * width, and alignment. Use the format:
+         *
+         * ```Typescript
+         * asciiTable("Title     | Stat | Runtime_|_Unit");
+         * ```
+         *
+         * Means:
+         * - `Title` is _left_ aligned, 9 chars wide
+         * - `Stat` is _centered_, 4 chars wide
+         * - `Runtime` is _right_ aligned, 7 chars wide
+         * - `Unit` is _left_ aligned, 4 chars wide
+         *
+         * Notice: A nice benefit is that you can select the header string and see
+         * exactly how wide it will be in the console.
+         *
+         * Calling this function gives you a table object, which you can add rows to,
+         * and eventually print.
+         *
+         * @param columns
+         * @returns
+         */
+        function simple(header, invisible) {
+            const invisibleChars = invisible === undefined ? DEFAULT_INVISIBLE : invisible;
+            const columns = header.split("|");
+            return new Table(Arr.Sync.map(columns, (s) => s.substring(1, s.length - 1).trim(), {
+                first: (s) => s.substring(0, s.length - 1).trim(),
+                last: (s) => s.substring(1).trim(),
+            }), Arr.Sync.map(columns, (c) => [
+                c.length - 2,
+                (c[0] === " ") === (c[c.length - 1] === " ")
+                    ? (s) => Str.alignCenter(s, c.length - 2, { invisibleChars })
                     : c[0] === " "
-                        ? (s) => Str.alignRight(s, c.length - 1, " ", invisibleHand)
-                        : (s) => Str.alignLeft(s, c.length - 1, " ", invisibleHand),
-            ],
-        }));
-    }
-    Str.asciiTable = asciiTable;
+                        ? (s) => Str.alignRight(s, c.length - 2, " ", invisibleChars)
+                        : (s) => Str.alignLeft(s, c.length - 2, " ", invisibleChars),
+            ], {
+                first: (c) => [
+                    c.length - 1,
+                    c[0] === " " && c[c.length - 1] === " "
+                        ? (s) => Str.alignCenter(s, c.length - 1, { invisibleChars })
+                        : c[c.length - 1] === " "
+                            ? (s) => Str.alignLeft(s, c.length - 1, " ", invisibleChars)
+                            : (s) => Str.alignRight(s, c.length - 1, " ", invisibleChars),
+                ],
+                last: (c) => [
+                    c.length - 1,
+                    c[0] === " " && c[c.length - 1] === " "
+                        ? (s) => Str.alignCenter(s, c.length - 1, { invisibleChars })
+                        : c[0] === " "
+                            ? (s) => Str.alignRight(s, c.length - 1, " ", invisibleChars)
+                            : (s) => Str.alignLeft(s, c.length - 1, " ", invisibleChars),
+                ],
+            }));
+        }
+        AsciiTable.simple = simple;
+        function advanced(headerWidth, data, format, after, prefix = "") {
+            const maxWidths = [];
+            const transformed = data.map((t) => {
+                const result = format(t);
+                result.forEach((s, i) => (maxWidths[i] = Math.max(maxWidths[i] || 0, s.length)));
+                return [result, t];
+            });
+            const headers = Obj.keys(headerWidth);
+            const fixedWidth = headers.reduce((a, h) => a + Math.abs(headerWidth[h]), 0);
+            const calculatedWindowWidth = typeof process.stdout.getWindowSize !== "function"
+                ? 80
+                : process.stdout.getWindowSize()[0];
+            const maxWidth = calculatedWindowWidth - prefix.length;
+            const freeWidth = maxWidth - (headers.length - 1) * "─┼─".length - fixedWidth;
+            const printHeaders = [];
+            const printers = headers.map((h, i) => {
+                maxWidths[i] =
+                    headerWidth[h] < 0
+                        ? Math.max(-headerWidth[h], Math.min(maxWidths[i], freeWidth))
+                        : headerWidth[h];
+                if (h[0] === "<") {
+                    printHeaders.push(Str.alignCenter(h.substring(1), maxWidths[i], {
+                        margin: [i === 0, i === headers.length - 1],
+                    }));
+                    return (s) => Str.alignLeft(s, maxWidths[i]);
+                }
+                else if (h[h.length - 1] === ">") {
+                    printHeaders.push(Str.alignCenter(h.substring(0, h.length - 1), maxWidths[i], {
+                        margin: [i === 0, i === headers.length - 1],
+                    }));
+                    return (s) => Str.alignRight(s, maxWidths[i]);
+                }
+                else {
+                    printHeaders.push(Str.alignCenter(h, maxWidths[i], {
+                        margin: [i === 0, i === headers.length - 1],
+                    }));
+                    return (s) => Str.alignCenter(s, maxWidths[i]);
+                }
+            });
+            transformed.forEach(([ss, t]) => {
+                const str = Arr.Sync.zip(printers, ss, (p, s) => p(s)).join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `);
+                after(str, t);
+            });
+            return (prefix +
+                printHeaders.join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `) +
+                `\n` +
+                prefix +
+                Str.GRAY +
+                maxWidths.map((w) => "─".repeat(w)).join(`─┼─`) +
+                Str.NORMAL_COLOR);
+        }
+        AsciiTable.advanced = advanced;
+    })(AsciiTable = Str.AsciiTable || (Str.AsciiTable = {}));
     Str.lowercase = "abcdefghijklmnopqrstuvwxyz";
     Str.uppercase = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     Str.digits = "0123456789";
@@ -2006,6 +2076,39 @@ export var Str;
         return false;
     }
     Str.semanticVersionLessThan = semanticVersionLessThan;
+    function censor(password) {
+        return (password[0] +
+            "*".repeat(password.length - 2) +
+            password[password.length - 1]);
+    }
+    Str.censor = censor;
+    function padNumber(n) {
+        const str = n.toString();
+        return " ".repeat(2 - str.length) + str;
+    }
+    Str.padNumber = padNumber;
+    Str.MONTHS = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+    function prettyDate(d) {
+        return (Str.MONTHS[d.getMonth()].substring(0, 3) +
+            " " +
+            d.getDate() +
+            ", " +
+            d.getFullYear());
+    }
+    Str.prettyDate = prettyDate;
 })(Str || (Str = {}));
 /**
  * Normally, you cannot have varargs at the beginning of a parameter list.
@@ -2227,6 +2330,22 @@ export function Catch(type, handler) {
  */
 export function Start(func, ...args) {
     return func.Start(args);
+}
+let counter = 0;
+export function gensym() {
+    return (counter++).toString();
+}
+export function withOptions(defaults, f) {
+    return (...args) => {
+        const last = args[args.length - 1];
+        if (typeof last !== "object" || last === null)
+            return f(defaults, ...args);
+        const keys = Obj.keys(last);
+        if (Arr.Sync.all(keys, (k) => k in defaults))
+            return f(Obj.Sync.map(defaults, (k, v) => (Obj.hasKey(k, last) && last[k]) || v), ...args.slice(0, args.length - 1));
+        else
+            return f(defaults, ...args);
+    };
 }
 // export class PathTo {
 //   constructor(private readonly path: string) {}

@@ -46,6 +46,10 @@ export function Promise_all<T extends readonly unknown[] | []>(
   return Promise.all(arr);
 }
 
+export function randomElement<T>(arr: readonly T[], rng = Math.random) {
+  return arr.length < 1 ? arr[0] : arr[~~(arr.length * rng())];
+}
+
 export function sleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(() => resolve(), ms);
@@ -462,10 +466,14 @@ export namespace Arr {
 }
 
 export namespace Obj {
-  export function keys<T extends Record<string, unknown>>(
-    o: T
-  ): Array<keyof T & string> {
+  export function keys<T extends {}>(o: T): Array<keyof T & string> {
     return Object.keys(o) as any;
+  }
+  export function hasKey<T extends object, K extends keyof T>(
+    l: K | string,
+    obj: T
+  ): l is K {
+    return l in obj;
   }
   export function random<T extends { [k: string]: unknown }>(
     o: T
@@ -719,6 +727,8 @@ type ValueTypeCheck<C> = <K extends string>(x: Record<K, C>) => Record<K, C>;
  * Which has the fields (GOOD), and they are pairs (GOOD)
  */
 export const valueType = <C>() => ((x) => x) as ValueTypeCheck<C>;
+
+export const tuple = <T extends unknown[]>(...x: T) => x;
 
 export const UnitType = valueType<readonly (readonly [number, string])[]>()({
   Duration: [
@@ -2128,17 +2138,22 @@ export namespace Str {
       width,
       InvisibleHand.make(invisibleChars)
     );
-  export const padBoth = (
-    str: string,
-    width: number,
-    c: string = " ",
-    invisibleChars: Set<string> = DEFAULT_INVISIBLE
-  ) =>
-    aligner((s, w) => {
-      const l = ~~(w / 2);
-      const r = w - l;
-      return " ".repeat(l) + s + " ".repeat(r);
-    })(str, width, InvisibleHand.make(invisibleChars));
+  export const padBoth = withOptions(
+    {
+      c: " ",
+      invisibleChars: DEFAULT_INVISIBLE,
+      margin: tuple(true, true),
+    },
+    (opt, str: string, width: number) =>
+      aligner((s, w) => {
+        const l = ~~(
+          (w + (opt.margin[0] ? 1 : 0) - (opt.margin[1] ? 1 : 0)) /
+          2
+        );
+        const r = w - l;
+        return opt.c.repeat(l) + s + opt.c.repeat(r);
+      })(str, width, InvisibleHand.make(opt.invisibleChars))
+  );
   export const alignRight = padStart;
   export const alignLeft = padEnd;
   export const alignCenter = padBoth;
@@ -2153,13 +2168,17 @@ export namespace Str {
     }
     addDivider() {
       this.rows.push(
-        Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─")
+        GRAY +
+          Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─") +
+          NORMAL_COLOR
       );
       return this;
     }
     addRow(...values: readonly string[]) {
       this.rows.push(
-        Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(" │ ")
+        Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(
+          ` ${GRAY}│${NORMAL_COLOR} `
+        )
       );
       return this;
     }
@@ -2168,68 +2187,143 @@ export namespace Str {
     }
   }
 
-  /**
-   * Used to draw pretty ascii tables. The header determines column count,
-   * width, and alignment. Use the format:
-   *
-   * ```Typescript
-   * asciiTable("Title     | Stat | Runtime_|_Unit");
-   * ```
-   *
-   * Means:
-   * - `Title` is _left_ aligned, 9 chars wide
-   * - `Stat` is _centered_, 4 chars wide
-   * - `Runtime` is _right_ aligned, 7 chars wide
-   * - `Unit` is _left_ aligned, 4 chars wide
-   *
-   * Notice: A nice benefit is that you can select the header string and see
-   * exactly how wide it will be in the console.
-   *
-   * Calling this function gives you a table object, which you can add rows to,
-   * and eventually print.
-   *
-   * @param columns
-   * @returns
-   */
-  export function asciiTable(header: string, invisibleChars?: Set<string>) {
-    const invisibleHand =
-      invisibleChars === undefined ? DEFAULT_INVISIBLE : invisibleChars;
-    const columns = header.split("|");
-    return new Table(
-      Arr.Sync.map(columns, (s) => s.substring(1, s.length - 1).trim(), {
-        first: (s) => s.substring(0, s.length - 1).trim(),
-        last: (s) => s.substring(1).trim(),
-      }),
-      Arr.Sync.map(
-        columns,
-        (c) => [
-          c.length - 2,
-          (c[0] === " ") === (c[c.length - 1] === " ")
-            ? (s) => alignCenter(s, c.length - 2, " ", invisibleHand)
-            : c[0] === " "
-            ? (s) => alignRight(s, c.length - 2, " ", invisibleHand)
-            : (s) => alignLeft(s, c.length - 2, " ", invisibleHand),
-        ],
-        {
-          first: (c) => [
-            c.length - 1,
-            c[0] === " " && c[c.length - 1] === " "
-              ? (s) => alignCenter(s, c.length - 1, " ", invisibleHand)
-              : c[c.length - 1] === " "
-              ? (s) => alignLeft(s, c.length - 1, " ", invisibleHand)
-              : (s) => alignRight(s, c.length - 1, " ", invisibleHand),
-          ],
-          last: (c) => [
-            c.length - 1,
-            c[0] === " " && c[c.length - 1] === " "
-              ? (s) => alignCenter(s, c.length - 1, " ", invisibleHand)
+  export namespace AsciiTable {
+    /**
+     * Used to draw pretty ascii tables. The header determines column count,
+     * width, and alignment. Use the format:
+     *
+     * ```Typescript
+     * asciiTable("Title     | Stat | Runtime_|_Unit");
+     * ```
+     *
+     * Means:
+     * - `Title` is _left_ aligned, 9 chars wide
+     * - `Stat` is _centered_, 4 chars wide
+     * - `Runtime` is _right_ aligned, 7 chars wide
+     * - `Unit` is _left_ aligned, 4 chars wide
+     *
+     * Notice: A nice benefit is that you can select the header string and see
+     * exactly how wide it will be in the console.
+     *
+     * Calling this function gives you a table object, which you can add rows to,
+     * and eventually print.
+     *
+     * @param columns
+     * @returns
+     */
+    export function simple(header: string, invisible?: Set<string>) {
+      const invisibleChars =
+        invisible === undefined ? DEFAULT_INVISIBLE : invisible;
+      const columns = header.split("|");
+      return new Table(
+        Arr.Sync.map(columns, (s) => s.substring(1, s.length - 1).trim(), {
+          first: (s) => s.substring(0, s.length - 1).trim(),
+          last: (s) => s.substring(1).trim(),
+        }),
+        Arr.Sync.map(
+          columns,
+          (c) => [
+            c.length - 2,
+            (c[0] === " ") === (c[c.length - 1] === " ")
+              ? (s) => alignCenter(s, c.length - 2, { invisibleChars })
               : c[0] === " "
-              ? (s) => alignRight(s, c.length - 1, " ", invisibleHand)
-              : (s) => alignLeft(s, c.length - 1, " ", invisibleHand),
+              ? (s) => alignRight(s, c.length - 2, " ", invisibleChars)
+              : (s) => alignLeft(s, c.length - 2, " ", invisibleChars),
           ],
+          {
+            first: (c) => [
+              c.length - 1,
+              c[0] === " " && c[c.length - 1] === " "
+                ? (s) => alignCenter(s, c.length - 1, { invisibleChars })
+                : c[c.length - 1] === " "
+                ? (s) => alignLeft(s, c.length - 1, " ", invisibleChars)
+                : (s) => alignRight(s, c.length - 1, " ", invisibleChars),
+            ],
+            last: (c) => [
+              c.length - 1,
+              c[0] === " " && c[c.length - 1] === " "
+                ? (s) => alignCenter(s, c.length - 1, { invisibleChars })
+                : c[0] === " "
+                ? (s) => alignRight(s, c.length - 1, " ", invisibleChars)
+                : (s) => alignLeft(s, c.length - 1, " ", invisibleChars),
+            ],
+          }
+        )
+      );
+    }
+
+    export function advanced<T>(
+      headerWidth: { [header: string]: number },
+      data: T[],
+      format: (t: T) => string[],
+      after: (row: string, t: T) => void,
+      prefix = ""
+    ) {
+      const maxWidths: number[] = [];
+      const transformed = data.map((t): [string[], T] => {
+        const result = format(t);
+        result.forEach(
+          (s, i) => (maxWidths[i] = Math.max(maxWidths[i] || 0, s.length))
+        );
+        return [result, t];
+      });
+      const headers = Obj.keys(headerWidth);
+      const fixedWidth = headers.reduce(
+        (a, h) => a + Math.abs(headerWidth[h]),
+        0
+      );
+      const calculatedWindowWidth =
+        typeof process.stdout.getWindowSize !== "function"
+          ? 80
+          : process.stdout.getWindowSize()[0];
+      const maxWidth = calculatedWindowWidth - prefix.length;
+      const freeWidth =
+        maxWidth - (headers.length - 1) * "─┼─".length - fixedWidth;
+      const printHeaders: string[] = [];
+      const printers = headers.map((h, i) => {
+        maxWidths[i] =
+          headerWidth[h] < 0
+            ? Math.max(-headerWidth[h], Math.min(maxWidths[i], freeWidth))
+            : headerWidth[h];
+        if (h[0] === "<") {
+          printHeaders.push(
+            Str.alignCenter(h.substring(1), maxWidths[i], {
+              margin: [i === 0, i === headers.length - 1],
+            })
+          );
+          return (s: string) => Str.alignLeft(s, maxWidths[i]);
+        } else if (h[h.length - 1] === ">") {
+          printHeaders.push(
+            Str.alignCenter(h.substring(0, h.length - 1), maxWidths[i], {
+              margin: [i === 0, i === headers.length - 1],
+            })
+          );
+          return (s: string) => Str.alignRight(s, maxWidths[i]);
+        } else {
+          printHeaders.push(
+            Str.alignCenter(h, maxWidths[i], {
+              margin: [i === 0, i === headers.length - 1],
+            })
+          );
+          return (s: string) => Str.alignCenter(s, maxWidths[i]);
         }
-      )
-    );
+      });
+      transformed.forEach(([ss, t]) => {
+        const str = Arr.Sync.zip(printers, ss, (p, s) => p(s)).join(
+          ` ${Str.GRAY}│${Str.NORMAL_COLOR} `
+        );
+        after(str, t);
+      });
+      return (
+        prefix +
+        printHeaders.join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `) +
+        `\n` +
+        prefix +
+        Str.GRAY +
+        maxWidths.map((w) => "─".repeat(w)).join(`─┼─`) +
+        Str.NORMAL_COLOR
+      );
+    }
   }
 
   export const lowercase = "abcdefghijklmnopqrstuvwxyz";
@@ -2284,6 +2378,43 @@ export namespace Str {
     else if (+os[1] > +ns[1]) return false;
     else if (+os[2] < +ns[2]) return true;
     return false;
+  }
+
+  export function censor(password: string) {
+    return (
+      password[0] +
+      "*".repeat(password.length - 2) +
+      password[password.length - 1]
+    );
+  }
+
+  export function padNumber(n: number) {
+    const str = n.toString();
+    return " ".repeat(2 - str.length) + str;
+  }
+
+  export const MONTHS = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+  export function prettyDate(d: Date) {
+    return (
+      MONTHS[d.getMonth()].substring(0, 3) +
+      " " +
+      d.getDate() +
+      ", " +
+      d.getFullYear()
+    );
   }
 }
 
@@ -2529,6 +2660,33 @@ export function Start<A extends unknown[], T>(
   ...args: A
 ) {
   return (func as InternalRaiser<never, A, T>).Start(args);
+}
+
+let counter = 0;
+export function gensym() {
+  return (counter++).toString();
+}
+
+export function withOptions<
+  T extends unknown[],
+  R,
+  O extends { [key: string]: unknown }
+>(defaults: O, f: (opts: O, ...args: T) => R) {
+  return (...args: T | [...T, { [k in keyof O]?: O[k] }]) => {
+    const last = args[args.length - 1];
+    if (typeof last !== "object" || last === null)
+      return f(defaults, ...(args as T));
+    const keys = Obj.keys(last);
+    if (Arr.Sync.all(keys, (k) => k in defaults))
+      return f(
+        Obj.Sync.map(
+          defaults,
+          (k, v) => (Obj.hasKey(k, last) && last[k]) || v
+        ) as O,
+        ...(args.slice(0, args.length - 1) as T)
+      );
+    else return f(defaults, ...(args as T));
+  };
 }
 
 // export class PathTo {
