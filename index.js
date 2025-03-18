@@ -2109,7 +2109,23 @@ export var Str;
             d.getFullYear());
     }
     Str.prettyDate = prettyDate;
+    /**
+     * Parse a boolean input value.
+     *
+     * @param bool input to parse
+     * @returns false for any casing of the string false, the value null or undefined. Otherwise returns true.
+     */
+    function parseBool(bool) {
+        return (bool !== null &&
+            bool !== undefined &&
+            bool !== "" &&
+            bool.toLowerCase() !== "false");
+    }
+    Str.parseBool = parseBool;
 })(Str || (Str = {}));
+export function addMinutes(minutes, date = new Date()) {
+    return new Date(date.getTime() + minutes * MINUTES);
+}
 /**
  * Normally, you cannot have varargs at the beginning of a parameter list.
  * This function solves that.

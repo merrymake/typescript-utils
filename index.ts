@@ -2362,9 +2362,11 @@ export namespace Str {
           ""
         );
   }
+
   export function plural(n: number, word: string) {
     return word + (n !== 1 ? "s" : "");
   }
+
   export function order(n: number) {
     return n + (["st", "nd", "rd"][n - 1] || "th");
   }
@@ -2416,6 +2418,25 @@ export namespace Str {
       d.getFullYear()
     );
   }
+
+  /**
+   * Parse a boolean input value.
+   *
+   * @param bool input to parse
+   * @returns false for any casing of the string false, the value null or undefined. Otherwise returns true.
+   */
+  export function parseBool(bool: string | null | undefined) {
+    return (
+      bool !== null &&
+      bool !== undefined &&
+      bool !== "" &&
+      bool.toLowerCase() !== "false"
+    );
+  }
+}
+
+export function addMinutes(minutes: number, date = new Date()) {
+  return new Date(date.getTime() + minutes * MINUTES);
 }
 
 /**
