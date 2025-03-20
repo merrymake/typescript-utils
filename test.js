@@ -67,3 +67,9 @@ const sleepThrows = Raises()((raise) => (n) => {
         /* no await */ start(failThrows); // This fails in normal Typescript
     });
 })();
+let e;
+Obj.hasKey("name", e) && e.name === "hej";
+let ob = { a: "hej", b: 5 };
+Obj.hasKey("c", ob) && ob.c;
+// Should fail
+// is(e) && "a" in e;

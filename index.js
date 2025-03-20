@@ -344,7 +344,7 @@ export var Obj;
     }
     Obj.keys = keys;
     function hasKey(l, obj) {
-        return l in obj;
+        return is(obj, "object") && l in obj;
     }
     Obj.hasKey = hasKey;
     function random(o) {
@@ -455,7 +455,8 @@ const checkers = {
     array: (v) => Array.isArray(v),
     NaN: (v) => (typeof v === "number" && isNaN(v)) ||
         (typeof v === "string" && isNaN(parseFloat(v))),
-    number: (v) => (typeof v === "number" && !isNaN(v)) ||
+    number: (v) => typeof v === "number" && !isNaN(v),
+    numeric: (v) => (typeof v === "number" && !isNaN(v)) ||
         (typeof v === "string" && !isNaN(parseFloat(v))),
     finite: (v) => typeof v === "number" && isFinite(v),
     infinite: (v) => typeof v === "number" && !isFinite(v),

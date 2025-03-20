@@ -469,11 +469,11 @@ export namespace Obj {
   export function keys<T extends {}>(o: T): Array<keyof T & string> {
     return Object.keys(o) as any;
   }
-  export function hasKey<T extends object, K extends keyof T>(
-    l: K | string,
-    obj: T
-  ): l is K {
-    return l in obj;
+  export function hasKey<K extends string, T extends { [k in K]: unknown }>(
+    l: K,
+    obj: T | unknown
+  ): obj is T {
+    return is(obj, "object") && l in obj;
   }
   export function random<T extends { [k: string]: unknown }>(
     o: T
@@ -651,6 +651,7 @@ interface IsTypeHelper {
   array: unknown[];
   NaN: number;
   number: number;
+  numeric: number;
   finite: number;
   infinite: number;
   string: string;
@@ -668,7 +669,8 @@ const checkers: { [k in keyof IsTypeHelper]: (v: unknown) => boolean } = {
   NaN: (v) =>
     (typeof v === "number" && isNaN(v)) ||
     (typeof v === "string" && isNaN(parseFloat(v))),
-  number: (v) =>
+  number: (v) => typeof v === "number" && !isNaN(v),
+  numeric: (v) =>
     (typeof v === "number" && !isNaN(v)) ||
     (typeof v === "string" && !isNaN(parseFloat(v))),
   finite: (v) => typeof v === "number" && isFinite(v),
@@ -683,7 +685,7 @@ const checkers: { [k in keyof IsTypeHelper]: (v: unknown) => boolean } = {
   false: (v) => v === false,
   object: (v) => v !== null && typeof v === "object",
 };
-export function is<K extends (keyof IsTypeHelper)[]>(
+export function is<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(
   v: unknown,
   ...ts: K
 ): v is IsTypeHelper[K[number]] {
