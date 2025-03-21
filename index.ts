@@ -2579,6 +2579,15 @@ export function varArgsFirst<T, L, R>(f: (ts: T[], l: L) => R) {
  * });
  * ```
  *
+ * It can also be used to rename something, or even deconstruct it in a ternary:
+ *
+ * ```Typescript
+ * const length = (as: unknown[]): number =>
+ *   as.length === 0
+ *     ? 0
+ *     : constify(as, ([hd, ...tl]) => 1 + length(tl));
+ * ```
+ *
  * @param args clojure
  * @param f initialization function
  * @returns const value
@@ -2704,7 +2713,7 @@ export function withOptions<
       return f(
         Obj.Sync.map(
           defaults,
-          (k, v) => (Obj.hasKey(k, last) && last[k]) || v
+          (k, v) => Obj.hasKey(k, last) ? last[k] : v
         ) as O,
         ...(args.slice(0, args.length - 1) as T)
       );

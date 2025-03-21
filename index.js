@@ -2262,6 +2262,15 @@ export function varArgsFirst(f) {
  * });
  * ```
  *
+ * It can also be used to rename something, or even deconstruct it in a ternary:
+ *
+ * ```Typescript
+ * const length = (as: unknown[]): number =>
+ *   as.length === 0
+ *     ? 0
+ *     : constify(as, ([hd, ...tl]) => 1 + length(tl));
+ * ```
+ *
  * @param args clojure
  * @param f initialization function
  * @returns const value
@@ -2359,7 +2368,7 @@ export function withOptions(defaults, f) {
             return f(defaults, ...args);
         const keys = Obj.keys(last);
         if (Arr.Sync.all(keys, (k) => k in defaults))
-            return f(Obj.Sync.map(defaults, (k, v) => (Obj.hasKey(k, last) && last[k]) || v), ...args.slice(0, args.length - 1));
+            return f(Obj.Sync.map(defaults, (k, v) => Obj.hasKey(k, last) ? last[k] : v), ...args.slice(0, args.length - 1));
         else
             return f(defaults, ...args);
     };
