@@ -1806,6 +1806,10 @@ export var Str;
         Str.STRIKE,
         Str.NO_STRIKE,
     ]);
+    function lengthWithoutInvisible(str, invisibleChars = DEFAULT_INVISIBLE) {
+        return InvisibleHand.make(invisibleChars).length(str);
+    }
+    Str.lengthWithoutInvisible = lengthWithoutInvisible;
     const invisible = {};
     let lastPrefix = undefined;
     function print(str, prefix = "", invisibleChars, prefixColor = "\x1b[90m", openEnded = false) {

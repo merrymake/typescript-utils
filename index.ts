@@ -2032,6 +2032,13 @@ export namespace Str {
     NO_STRIKE,
   ]);
 
+  export function lengthWithoutInvisible(
+    str: string,
+    invisibleChars = DEFAULT_INVISIBLE
+  ) {
+    return InvisibleHand.make(invisibleChars).length(str);
+  }
+
   const invisible: { [prefix: string]: string[] } = {};
   let lastPrefix: string | undefined = undefined;
   export function print(
