@@ -451,24 +451,60 @@ export var Obj;
     }
     Obj.Async = Async;
 })(Obj || (Obj = {}));
+var TypeCheckers;
+(function (TypeCheckers) {
+    function NaN(v) {
+        return ((typeof v === "number" && isNaN(v)) ||
+            (typeof v === "string" && isNaN(parseFloat(v))));
+    }
+    TypeCheckers.NaN = NaN;
+    function number(v) {
+        return typeof v === "number" && !isNaN(v);
+    }
+    TypeCheckers.number = number;
+    function numeric(v) {
+        return ((typeof v === "number" && !isNaN(v)) ||
+            (typeof v === "string" && !isNaN(parseFloat(v))));
+    }
+    TypeCheckers.numeric = numeric;
+    function finite(v) {
+        return typeof v === "number" && isFinite(v);
+    }
+    TypeCheckers.finite = finite;
+    function infinite(v) {
+        return typeof v === "number" && !isFinite(v);
+    }
+    TypeCheckers.infinite = infinite;
+    function truthy(v) {
+        return !!v;
+    }
+    TypeCheckers.truthy = truthy;
+    function falsy(v) {
+        return !v;
+    }
+    TypeCheckers.falsy = falsy;
+    function object(v) {
+        return v !== null && typeof v === "object";
+    }
+    TypeCheckers.object = object;
+})(TypeCheckers || (TypeCheckers = {}));
 const checkers = {
     array: (v) => Array.isArray(v),
-    NaN: (v) => (typeof v === "number" && isNaN(v)) ||
-        (typeof v === "string" && isNaN(parseFloat(v))),
-    number: (v) => typeof v === "number" && !isNaN(v),
-    numeric: (v) => (typeof v === "number" && !isNaN(v)) ||
-        (typeof v === "string" && !isNaN(parseFloat(v))),
-    finite: (v) => typeof v === "number" && isFinite(v),
-    infinite: (v) => typeof v === "number" && !isFinite(v),
+    NaN: TypeCheckers.NaN,
+    number: TypeCheckers.number,
+    numeric: TypeCheckers.numeric,
+    finite: TypeCheckers.finite,
+    infinite: TypeCheckers.infinite,
     string: (v) => typeof v === "string",
     null: (v) => v === null,
     undefined: (v) => v === undefined,
-    truthy: (v) => !!v,
-    falsy: (v) => !v,
+    truthy: TypeCheckers.truthy,
+    falsy: TypeCheckers.falsy,
     boolean: (v) => typeof v === "boolean",
     true: (v) => v === true,
     false: (v) => v === false,
-    object: (v) => v !== null && typeof v === "object",
+    object: TypeCheckers.object,
+    buffer: (v) => Buffer.isBuffer(v),
 };
 export function is(v, ...ts) {
     return Arr.Sync.some(ts, (k) => checkers[k](v));

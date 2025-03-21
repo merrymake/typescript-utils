@@ -663,27 +663,62 @@ interface IsTypeHelper {
   true: true;
   false: false;
   object: Record<number | string | symbol, unknown>;
+  buffer: Buffer;
 }
-const checkers: { [k in keyof IsTypeHelper]: (v: unknown) => boolean } = {
+
+namespace TypeCheckers {
+  export function NaN(v: unknown): v is number {
+    return (
+      (typeof v === "number" && isNaN(v)) ||
+      (typeof v === "string" && isNaN(parseFloat(v)))
+    );
+  }
+  export function number(v: unknown): v is number {
+    return typeof v === "number" && !isNaN(v);
+  }
+  export function numeric(v: unknown): v is number {
+    return (
+      (typeof v === "number" && !isNaN(v)) ||
+      (typeof v === "string" && !isNaN(parseFloat(v)))
+    );
+  }
+  export function finite(v: unknown): v is number {
+    return typeof v === "number" && isFinite(v);
+  }
+  export function infinite(v: unknown): v is number {
+    return typeof v === "number" && !isFinite(v);
+  }
+  export function truthy(v: unknown): v is true {
+    return !!v;
+  }
+  export function falsy(v: unknown): v is false {
+    return !v;
+  }
+  export function object(
+    v: unknown
+  ): v is Record<number | string | symbol, unknown> {
+    return v !== null && typeof v === "object";
+  }
+}
+const checkers: {
+  [k in keyof IsTypeHelper]: (v: unknown) => v is IsTypeHelper[k];
+} = {
   array: (v) => Array.isArray(v),
-  NaN: (v) =>
-    (typeof v === "number" && isNaN(v)) ||
-    (typeof v === "string" && isNaN(parseFloat(v))),
-  number: (v) => typeof v === "number" && !isNaN(v),
-  numeric: (v) =>
-    (typeof v === "number" && !isNaN(v)) ||
-    (typeof v === "string" && !isNaN(parseFloat(v))),
-  finite: (v) => typeof v === "number" && isFinite(v),
-  infinite: (v) => typeof v === "number" && !isFinite(v),
+  NaN: TypeCheckers.NaN,
+  number: TypeCheckers.number,
+  numeric: TypeCheckers.numeric,
+  finite: TypeCheckers.finite,
+  infinite: TypeCheckers.infinite,
   string: (v) => typeof v === "string",
   null: (v) => v === null,
   undefined: (v) => v === undefined,
-  truthy: (v) => !!v,
-  falsy: (v) => !v,
+  truthy: TypeCheckers.truthy,
+  falsy: TypeCheckers.falsy,
   boolean: (v) => typeof v === "boolean",
   true: (v) => v === true,
   false: (v) => v === false,
-  object: (v) => v !== null && typeof v === "object",
+  object: TypeCheckers.object,
+  buffer: (v) => Buffer.isBuffer(v),
 };
 export function is<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(
   v: unknown,
@@ -2711,9 +2746,8 @@ export function withOptions<
     const keys = Obj.keys(last);
     if (Arr.Sync.all(keys, (k) => k in defaults))
       return f(
-        Obj.Sync.map(
-          defaults,
-          (k, v) => Obj.hasKey(k, last) ? last[k] : v
+        Obj.Sync.map(defaults, (k, v) =>
+          Obj.hasKey(k, last) ? last[k] : v
         ) as O,
         ...(args.slice(0, args.length - 1) as T)
       );
