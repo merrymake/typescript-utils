@@ -1,6 +1,7 @@
 import {
   Arr,
   Catch,
+  Is,
   is,
   Obj,
   Promise_all,
@@ -101,7 +102,15 @@ const sleepThrows = Raises()((raise) => (n: number) => {
 let e: unknown;
 Obj.hasKey("name", e) && e.name === "hej";
 let ob = { a: "hej", b: 5 };
+// Obj.hasKey("c", ob) && ob.c;
 Obj.hasKey("c", ob) && ob.c;
+
+const t = Obj.dot(e, "response").dot("data").as("string");
+Is.a("string").in("data").in("response").check(e) &&
+  e.response.data.substring(0, 1);
+
+// No way to make :'(
+// Obj.hasKeys(e, "response", "data") && e.response.data
 
 // Should fail
 // is(e) && "a" in e;

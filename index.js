@@ -337,16 +337,67 @@ export var Arr;
     }
     Arr.Async = Async;
 })(Arr || (Arr = {}));
+class Undefined {
+    static instance = new Undefined();
+    constructor() { }
+    dot(k) {
+        return this;
+    }
+    as(...ts) {
+        return undefined;
+    }
+}
+class Possible {
+    v;
+    constructor(v) {
+        this.v = v;
+    }
+    dot(k) {
+        return Obj.hasKey(k, this.v)
+            ? new Possible(this.v[k])
+            : Undefined.instance;
+    }
+    as(...ts) {
+        return is(this.v, ...ts) ? this.v : undefined;
+    }
+}
+export var Is;
+(function (Is) {
+    class Check {
+        ch;
+        constructor(ch) {
+            this.ch = ch;
+        }
+        in(k) {
+            return new Check((o) => Obj.hasKey(k, o) && this.ch(o[k]));
+        }
+        check(o) {
+            return this.ch(o);
+        }
+    }
+    function a(...ts) {
+        return new Check((o) => is(o, ...ts));
+    }
+    Is.a = a;
+})(Is || (Is = {}));
 export var Obj;
 (function (Obj) {
     function keys(o) {
         return Object.keys(o);
     }
     Obj.keys = keys;
-    function hasKey(l, obj) {
-        return is(obj, "object") && l in obj;
+    function hasKey(k, obj) {
+        return is(obj, "object") && k in obj;
     }
     Obj.hasKey = hasKey;
+    function dot(obj, k) {
+        return Obj.hasKey(k, obj) ? new Possible(obj[k]) : Undefined.instance;
+    }
+    Obj.dot = dot;
+    function access(obj, k) {
+        return Obj.hasKey(k, obj) ? obj : undefined;
+    }
+    Obj.access = access;
     function random(o) {
         const key = Arr.random(keys(o)).value;
         return { value: o[key], key };
@@ -475,6 +526,14 @@ var TypeCheckers;
         return typeof v === "number" && !isFinite(v);
     }
     TypeCheckers.infinite = infinite;
+    function stringNonEmpty(v) {
+        return typeof v === "string" && v.length > 0;
+    }
+    TypeCheckers.stringNonEmpty = stringNonEmpty;
+    function arrayNonEmpty(v) {
+        return Array.isArray(v) && v.length > 0;
+    }
+    TypeCheckers.arrayNonEmpty = arrayNonEmpty;
     function truthy(v) {
         return !!v;
     }
@@ -490,12 +549,14 @@ var TypeCheckers;
 })(TypeCheckers || (TypeCheckers = {}));
 const checkers = {
     array: (v) => Array.isArray(v),
+    arrayNonEmpty: TypeCheckers.arrayNonEmpty,
     NaN: TypeCheckers.NaN,
     number: TypeCheckers.number,
     numeric: TypeCheckers.numeric,
     finite: TypeCheckers.finite,
     infinite: TypeCheckers.infinite,
     string: (v) => typeof v === "string",
+    stringNonEmpty: TypeCheckers.stringNonEmpty,
     null: (v) => v === null,
     undefined: (v) => v === undefined,
     truthy: TypeCheckers.truthy,

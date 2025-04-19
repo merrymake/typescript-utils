@@ -465,15 +465,71 @@ export namespace Arr {
   }
 }
 
+interface DotHelper {
+  dot<K extends string>(k: K): DotHelper;
+  as<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(
+    ...ts: K
+  ): IsTypeHelper[K[number]] | undefined;
+}
+class Undefined implements DotHelper {
+  static readonly instance = new Undefined();
+  private constructor() {}
+  dot<K extends string>(k: K) {
+    return this;
+  }
+  as<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(...ts: K) {
+    return undefined;
+  }
+}
+class Possible implements DotHelper {
+  constructor(private v: unknown) {}
+  dot<K extends string>(k: K): DotHelper {
+    return Obj.hasKey<K>(k, this.v)
+      ? new Possible(this.v[k])
+      : Undefined.instance;
+  }
+  as<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(...ts: K) {
+    return is(this.v, ...ts) ? this.v : undefined;
+  }
+}
+
+export namespace Is {
+  class Check<T> {
+    constructor(private ch: (o: unknown) => o is T) {}
+    in<K extends string>(k: K) {
+      return new Check<{ [k in K]: T }>(
+        (o): o is { [k in K]: T } => Obj.hasKey(k, o) && this.ch(o[k])
+      );
+    }
+    check(o: unknown) {
+      return this.ch(o);
+    }
+  }
+  export function a<K extends [keyof IsTypeHelper, ...(keyof IsTypeHelper)[]]>(
+    ...ts: K
+  ) {
+    return new Check<IsTypeHelper[K[number]]>((o) => is(o, ...ts));
+  }
+}
+
 export namespace Obj {
   export function keys<T extends {}>(o: T): Array<keyof T & string> {
     return Object.keys(o) as any;
   }
-  export function hasKey<K extends string, T extends { [k in K]: unknown }>(
-    l: K,
+  export function hasKey<K extends string, T = { [k in K]: unknown }>(
+    k: K,
     obj: T | unknown
   ): obj is T {
-    return is(obj, "object") && l in obj;
+    return is(obj, "object") && k in obj;
+  }
+  export function dot<K extends string>(obj: unknown, k: K): DotHelper {
+    return Obj.hasKey<K>(k, obj) ? new Possible(obj[k]) : Undefined.instance;
+  }
+  export function access<K extends string>(
+    obj: unknown,
+    k: K
+  ): { [k in K]: unknown } | undefined {
+    return Obj.hasKey(k, obj) ? obj : undefined;
   }
   export function random<T extends { [k: string]: unknown }>(
     o: T
@@ -649,12 +705,14 @@ export namespace Obj {
 
 interface IsTypeHelper {
   array: unknown[];
+  arrayNonEmpty: unknown[];
   NaN: number;
   number: number;
   numeric: number;
   finite: number;
   infinite: number;
   string: string;
+  stringNonEmpty: string;
   null: null;
   undefined: undefined;
   truthy: boolean;
@@ -667,31 +725,41 @@ interface IsTypeHelper {
 }
 
 namespace TypeCheckers {
-  export function NaN(v: unknown): v is number {
+  export function NaN(v: unknown): v is IsTypeHelper["NaN"] {
     return (
       (typeof v === "number" && isNaN(v)) ||
       (typeof v === "string" && isNaN(parseFloat(v)))
     );
   }
-  export function number(v: unknown): v is number {
+  export function number(v: unknown): v is IsTypeHelper["number"] {
     return typeof v === "number" && !isNaN(v);
   }
-  export function numeric(v: unknown): v is number {
+  export function numeric(v: unknown): v is IsTypeHelper["numeric"] {
     return (
       (typeof v === "number" && !isNaN(v)) ||
       (typeof v === "string" && !isNaN(parseFloat(v)))
     );
   }
-  export function finite(v: unknown): v is number {
+  export function finite(v: unknown): v is IsTypeHelper["finite"] {
     return typeof v === "number" && isFinite(v);
   }
-  export function infinite(v: unknown): v is number {
+  export function infinite(v: unknown): v is IsTypeHelper["infinite"] {
     return typeof v === "number" && !isFinite(v);
   }
-  export function truthy(v: unknown): v is true {
+  export function stringNonEmpty(
+    v: unknown
+  ): v is IsTypeHelper["stringNonEmpty"] {
+    return typeof v === "string" && v.length > 0;
+  }
+  export function arrayNonEmpty(
+    v: unknown
+  ): v is IsTypeHelper["arrayNonEmpty"] {
+    return Array.isArray(v) && v.length > 0;
+  }
+  export function truthy(v: unknown): v is IsTypeHelper["truthy"] {
     return !!v;
   }
-  export function falsy(v: unknown): v is false {
+  export function falsy(v: unknown): v is IsTypeHelper["falsy"] {
     return !v;
   }
   export function object(
@@ -704,12 +772,14 @@ const checkers: {
   [k in keyof IsTypeHelper]: (v: unknown) => v is IsTypeHelper[k];
 } = {
   array: (v) => Array.isArray(v),
+  arrayNonEmpty: TypeCheckers.arrayNonEmpty,
   NaN: TypeCheckers.NaN,
   number: TypeCheckers.number,
   numeric: TypeCheckers.numeric,
   finite: TypeCheckers.finite,
   infinite: TypeCheckers.infinite,
   string: (v) => typeof v === "string",
+  stringNonEmpty: TypeCheckers.stringNonEmpty,
   null: (v) => v === null,
   undefined: (v) => v === undefined,
   truthy: TypeCheckers.truthy,

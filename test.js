@@ -1,4 +1,4 @@
-import { Arr, Catch, is, Obj, Promise_all, Raises, sleep, Start, Str, UnitType, valueType, } from "./index.js";
+import { Arr, Catch, Is, is, Obj, Promise_all, Raises, sleep, Start, Str, UnitType, valueType, } from "./index.js";
 console.log(Obj.Sync.map({ a: 5, b: 10 }, (k, v) => "a"));
 console.log(Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6)); // {yes: {b:10}, no: {a:5}}
 const alfa = Obj.Sync.partition({ a: 5, b: 10 }, (k, v) => v > 6, {
@@ -70,6 +70,12 @@ const sleepThrows = Raises()((raise) => (n) => {
 let e;
 Obj.hasKey("name", e) && e.name === "hej";
 let ob = { a: "hej", b: 5 };
+// Obj.hasKey("c", ob) && ob.c;
 Obj.hasKey("c", ob) && ob.c;
+const t = Obj.dot(e, "response").dot("data").as("string");
+Is.a("string").in("data").in("response").check(e) &&
+    e.response.data.substring(0, 1);
+// No way to make :'(
+// Obj.hasKeys(e, "response", "data") && e.response.data
 // Should fail
 // is(e) && "a" in e;
