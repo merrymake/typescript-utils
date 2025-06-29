@@ -1896,11 +1896,13 @@ export namespace Str {
     private constructor(private steps: readonly string[]) {
       this.before = Date.now();
       process.stdout.write(HIDE_CURSOR);
-      this.interval = setInterval(() => {
+      const tick = () => {
         this.spinnerIndex = (this.spinnerIndex + 1) % this.steps.length;
         process.stdout.write(this.steps[this.spinnerIndex]);
         process.stdout.moveCursor(-this.steps[this.spinnerIndex].length, 0);
-      }, 125);
+      };
+      this.interval = setInterval(tick, 125);
+      tick();
     }
     stop() {
       clearInterval(this.interval);
@@ -2459,10 +2461,40 @@ export namespace Str {
     return result.join("");
   }
 
-  export function partition(str: string, radix: string) {
+  /**
+   * @param str
+   * @param radix
+   * @returns [left, right | "", radix | ""]
+   */
+  export function partitionLeft(
+    str: string,
+    radix: string
+  ): [string, string, string] {
     const index = str.indexOf(radix);
-    if (index < 0) return [str, ""];
-    return [str.substring(0, index), str.substring(index + radix.length)];
+    if (index < 0) return [str, "", ""];
+    return [
+      str.substring(0, index),
+      str.substring(index + radix.length),
+      radix,
+    ];
+  }
+
+  /**
+   * @param str
+   * @param radix
+   * @returns [left, right | "", radix | ""]
+   */
+  export function partitionRight(
+    str: string,
+    radix: string
+  ): [string, string, string] {
+    const index = str.lastIndexOf(radix);
+    if (index < 0) return [str, "", ""];
+    return [
+      str.substring(0, index),
+      str.substring(index + radix.length),
+      radix,
+    ];
   }
 
   export function toFolderName(str: string) {
@@ -2478,7 +2510,11 @@ export namespace Str {
   }
 
   export function plural(n: number, word: string) {
-    return word + (n !== 1 ? "s" : "");
+    return n !== 1
+      ? word[word.length - 1] === "y"
+        ? word.substring(0, word.length - 1) + "ies"
+        : word + "s"
+      : word;
   }
 
   export function order(n: number) {
@@ -2496,12 +2532,9 @@ export namespace Str {
     return false;
   }
 
-  export function censor(password: string) {
-    return (
-      password[0] +
-      "*".repeat(password.length - 2) +
-      password[password.length - 1]
-    );
+  export function censor(str: string) {
+    const [sec, pub, ch] = partitionLeft(str, "@");
+    return sec[0] + "*".repeat(sec.length - 2) + sec[sec.length - 1] + ch + pub;
   }
 
   export function padNumber(n: number) {
@@ -2837,7 +2870,7 @@ export function withOptions<
 //   with(folder: string) {
 //     return new PathTo(join(this.path, folder));
 //   }
-//   last() {
+//   parent() {
 //     return basename(this.path);
 //   }
 //   toString() {

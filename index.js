@@ -1660,11 +1660,13 @@ export var Str;
             this.steps = steps;
             this.before = Date.now();
             process.stdout.write(Str.HIDE_CURSOR);
-            this.interval = setInterval(() => {
+            const tick = () => {
                 this.spinnerIndex = (this.spinnerIndex + 1) % this.steps.length;
                 process.stdout.write(this.steps[this.spinnerIndex]);
                 process.stdout.moveCursor(-this.steps[this.spinnerIndex].length, 0);
-            }, 125);
+            };
+            this.interval = setInterval(tick, 125);
+            tick();
         }
         stop() {
             clearInterval(this.interval);
@@ -2137,13 +2139,38 @@ export var Str;
         return result.join("");
     }
     Str.generateString = generateString;
-    function partition(str, radix) {
+    /**
+     * @param str
+     * @param radix
+     * @returns [left, right | "", radix | ""]
+     */
+    function partitionLeft(str, radix) {
         const index = str.indexOf(radix);
         if (index < 0)
-            return [str, ""];
-        return [str.substring(0, index), str.substring(index + radix.length)];
+            return [str, "", ""];
+        return [
+            str.substring(0, index),
+            str.substring(index + radix.length),
+            radix,
+        ];
     }
-    Str.partition = partition;
+    Str.partitionLeft = partitionLeft;
+    /**
+     * @param str
+     * @param radix
+     * @returns [left, right | "", radix | ""]
+     */
+    function partitionRight(str, radix) {
+        const index = str.lastIndexOf(radix);
+        if (index < 0)
+            return [str, "", ""];
+        return [
+            str.substring(0, index),
+            str.substring(index + radix.length),
+            radix,
+        ];
+    }
+    Str.partitionRight = partitionRight;
     function toFolderName(str) {
         return str.toLowerCase().replace(/[^a-z0-9\-_]/g, "-");
     }
@@ -2155,7 +2182,11 @@ export var Str;
     }
     Str.list = list;
     function plural(n, word) {
-        return word + (n !== 1 ? "s" : "");
+        return n !== 1
+            ? word[word.length - 1] === "y"
+                ? word.substring(0, word.length - 1) + "ies"
+                : word + "s"
+            : word;
     }
     Str.plural = plural;
     function order(n) {
@@ -2178,10 +2209,9 @@ export var Str;
         return false;
     }
     Str.semanticVersionLessThan = semanticVersionLessThan;
-    function censor(password) {
-        return (password[0] +
-            "*".repeat(password.length - 2) +
-            password[password.length - 1]);
+    function censor(str) {
+        const [sec, pub, ch] = partitionLeft(str, "@");
+        return sec[0] + "*".repeat(sec.length - 2) + sec[sec.length - 1] + ch + pub;
     }
     Str.censor = censor;
     function padNumber(n) {
@@ -2479,7 +2509,7 @@ export function withOptions(defaults, f) {
 //   with(folder: string) {
 //     return new PathTo(join(this.path, folder));
 //   }
-//   last() {
+//   parent() {
 //     return basename(this.path);
 //   }
 //   toString() {
