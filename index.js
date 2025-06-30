@@ -1825,16 +1825,16 @@ export var Str;
             return str.matchAll(this.regex);
         }
     }
-    Str.NORMAL_COLOR = "\x1b[0m";
-    Str.BLACK = "\x1b[30m";
-    Str.RED = "\x1b[31m";
-    Str.GREEN = "\x1b[32m";
-    Str.YELLOW = "\x1b[33m";
-    Str.BLUE = "\x1b[34m";
-    Str.PURPLE = "\x1b[35m";
-    Str.CYAN = "\x1b[36m";
-    Str.WHITE = "\x1b[37m";
-    Str.GRAY = "\x1b[90m";
+    Str.FG_BLACK = "\x1b[30m";
+    Str.FG_RED = "\x1b[31m";
+    Str.FG_GREEN = "\x1b[32m";
+    Str.FG_YELLOW = "\x1b[33m";
+    Str.FG_BLUE = "\x1b[34m";
+    Str.FG_PURPLE = "\x1b[35m";
+    Str.FG_CYAN = "\x1b[36m";
+    Str.FG_WHITE = "\x1b[37m";
+    Str.FG_GRAY = "\x1b[90m";
+    Str.FG_DEFAULT = "\x1b[0m";
     Str.BG_BLACK = "\x1b[40m";
     Str.BG_RED = "\x1b[41m";
     Str.BG_GREEN = "\x1b[42m";
@@ -1844,19 +1844,24 @@ export var Str;
     Str.BG_CYAN = "\x1b[46m";
     Str.BG_WHITE = "\x1b[47m";
     Str.BG_GRAY = "\x1b[100m";
+    Str.BG_DEFAULT = "\x1b[49m";
     Str.STRIKE = "\x1b[9m";
     Str.NO_STRIKE = "\x1b[29m";
+    Str.UP = "\x1b[A";
+    Str.DOWN = "\x1b[B";
+    Str.LEFT = "\x1b[D";
+    Str.RIGHT = "\x1b[C";
     const DEFAULT_INVISIBLE = new Set([
-        Str.NORMAL_COLOR,
-        Str.BLACK,
-        Str.RED,
-        Str.GREEN,
-        Str.YELLOW,
-        Str.BLUE,
-        Str.PURPLE,
-        Str.CYAN,
-        Str.WHITE,
-        Str.GRAY,
+        Str.FG_DEFAULT,
+        Str.FG_BLACK,
+        Str.FG_RED,
+        Str.FG_GREEN,
+        Str.FG_YELLOW,
+        Str.FG_BLUE,
+        Str.FG_PURPLE,
+        Str.FG_CYAN,
+        Str.FG_WHITE,
+        Str.FG_GRAY,
         Str.BG_BLACK,
         Str.BG_RED,
         Str.BG_GREEN,
@@ -1868,34 +1873,55 @@ export var Str;
         Str.BG_GRAY,
         Str.STRIKE,
         Str.NO_STRIKE,
+        Str.SHOW_CURSOR,
+        Str.HIDE_CURSOR,
+        Str.UP,
+        Str.LEFT,
+        Str.RIGHT,
+        Str.DOWN,
     ]);
     function lengthWithoutInvisible(str, invisibleChars = DEFAULT_INVISIBLE) {
         return InvisibleHand.make(invisibleChars).length(str);
     }
     Str.lengthWithoutInvisible = lengthWithoutInvisible;
+    function withoutInvisible(str, invisibleChars = DEFAULT_INVISIBLE) {
+        return InvisibleHand.make(invisibleChars).remove(str);
+    }
+    Str.withoutInvisible = withoutInvisible;
     const invisible = {};
     let lastPrefix = undefined;
-    function print(str, prefix = "", invisibleChars, prefixColor = "\x1b[90m", openEnded = false) {
-        const invisibleHand = InvisibleHand.make(invisibleChars === undefined ? DEFAULT_INVISIBLE : invisibleChars);
-        const prefixCleanLength = invisibleHand.length(prefix);
+    Str.print = withOptions({
+        prefix: "",
+        prefixColor: Str.FG_GRAY,
+        openEnded: false,
+        invisibleChars: DEFAULT_INVISIBLE,
+    }, (opts, str) => {
+        const invisibleHand = InvisibleHand.make(opts.invisibleChars);
+        const prefixCleanLength = invisibleHand.length(opts.prefix);
         const middleSymbol = " ".repeat(prefixCleanLength) + "│";
-        const headerSymbol = openEnded === true && lastPrefix === prefix ? middleSymbol : prefix + "┐";
-        lastPrefix = prefix;
-        if (invisible[prefix] === undefined || openEnded === false)
-            invisible[prefix] = [];
-        const [headerPrefix, middlePrefix, footerPrefix, prefixLength] = prefixCleanLength > 0
-            ? [
-                prefixColor + headerSymbol + Str.NORMAL_COLOR,
-                prefixColor + middleSymbol + Str.NORMAL_COLOR,
-                prefixColor + prefix + "┘" + Str.NORMAL_COLOR,
-                prefixCleanLength + 1,
-            ]
-            : [prefix, prefix, prefix, 0];
+        const headerSymbol = opts.openEnded === true && lastPrefix === opts.prefix
+            ? middleSymbol
+            : opts.prefix + "┐";
+        lastPrefix = opts.prefix;
+        if (invisible[opts.prefix] === undefined || opts.openEnded === false)
+            invisible[opts.prefix] = [];
+        const [headerPrefix, middlePrefix, footerPrefix, prefixLength] = prefixCleanLength === 0
+            ? [opts.prefix, opts.prefix, opts.prefix, 0]
+            : opts.openEnded === true
+                ? [
+                    opts.prefixColor + headerSymbol + Str.FG_DEFAULT,
+                    opts.prefixColor + middleSymbol + Str.FG_DEFAULT,
+                    opts.prefixColor + opts.prefix + "┘" + Str.FG_DEFAULT,
+                    prefixCleanLength + 1,
+                ]
+                : [
+                    opts.prefixColor + "┌" + opts.prefix + Str.FG_DEFAULT + " ",
+                    opts.prefixColor + "│" + Str.FG_DEFAULT,
+                    opts.prefixColor + "└" + opts.prefix + Str.FG_DEFAULT + " ",
+                    1,
+                ];
         const width = process.stdout.getWindowSize()[0];
-        const lines = Arr.Sync.map(str
-            .trimEnd()
-            .split("\n")
-            .flatMap((l) => {
+        const lines = Arr.Sync.map(str.split("\n").flatMap((l) => {
             const words = l.split(" ");
             const result = [[]];
             let widthLeft = width - prefixLength;
@@ -1934,12 +1960,12 @@ export var Str;
                         }
                         const insert = words[i].substring(0, iChars);
                         result[result.length - 1].push(result[result.length - 1].length === 0
-                            ? invisible[prefix].join("") + insert
+                            ? invisible[opts.prefix].join("") + insert
                             : insert);
-                        invisible[prefix].push(...invs);
+                        invisible[opts.prefix].push(...invs);
                     }
                     words.splice(i, 1, ...indent, ...(indentIndex > 0 ||
-                        /^([*\-]|[0-9a-z]+[^ ]?)$/.test(words[indentIndex])
+                        /^([*\-]|[0-9a-z]+[\.\)\:])$/.test(words[indentIndex])
                         ? new Array(words[indentIndex].length + 1).fill("")
                         : []), words[i].substring(iChars));
                     result.push([]);
@@ -1949,19 +1975,18 @@ export var Str;
                     const inv = invisibleHand.match(words[i]) || [];
                     widthLeft -= wLength + 1;
                     result[result.length - 1].push(result[result.length - 1].length === 0
-                        ? invisible[prefix].join("") + words[i++]
+                        ? invisible[opts.prefix].join("") + words[i++]
                         : words[i++]);
-                    invisible[prefix].push(...inv);
+                    invisible[opts.prefix].push(...inv);
                 }
             }
             return result.map((ws) => ws.join(" "));
         }), (l) => middlePrefix + l, {
             first: (l) => headerPrefix + l,
-            last: openEnded === true ? undefined : (l) => footerPrefix + l,
+            last: opts.openEnded === true ? undefined : (l) => footerPrefix + l,
         }).join("\n");
         process.stdout.write(lines + "\n");
-    }
-    Str.print = print;
+    });
     function aligner(align) {
         return (str, width, invisibleHand) => {
             const cleanStr = invisibleHand.remove(str);
@@ -1999,13 +2024,13 @@ export var Str;
             this.addDivider();
         }
         addDivider() {
-            this.rows.push(Str.GRAY +
+            this.rows.push(Str.FG_GRAY +
                 Arr.Sync.map(this.config, (c) => "─".repeat(c[0])).join("─┼─") +
-                Str.NORMAL_COLOR);
+                Str.FG_DEFAULT);
             return this;
         }
         addRow(...values) {
-            this.rows.push(Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `));
+            this.rows.push(Arr.Sync.zip(this.config, values, (c, v) => c[1](v)).join(` ${Str.FG_GRAY}│${Str.FG_DEFAULT} `));
             return this;
         }
         toString() {
@@ -2110,16 +2135,16 @@ export var Str;
                 }
             });
             transformed.forEach(([ss, t]) => {
-                const str = Arr.Sync.zip(printers, ss, (p, s) => p(s)).join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `);
+                const str = Arr.Sync.zip(printers, ss, (p, s) => p(s)).join(` ${Str.FG_GRAY}│${Str.FG_DEFAULT} `);
                 after(str, t);
             });
             return (prefix +
-                printHeaders.join(` ${Str.GRAY}│${Str.NORMAL_COLOR} `) +
+                printHeaders.join(` ${Str.FG_GRAY}│${Str.FG_DEFAULT} `) +
                 `\n` +
                 prefix +
-                Str.GRAY +
+                Str.FG_GRAY +
                 maxWidths.map((w) => "─".repeat(w)).join(`─┼─`) +
-                Str.NORMAL_COLOR);
+                Str.FG_DEFAULT);
         }
         AsciiTable.advanced = advanced;
     })(AsciiTable = Str.AsciiTable || (Str.AsciiTable = {}));
@@ -2181,7 +2206,7 @@ export var Str;
             : Arr.Sync.map(strs, (e) => e + ", ", { last: (e) => "and " + e }).join("");
     }
     Str.list = list;
-    function plural(n, word) {
+    function plural(word, n = 0) {
         return n !== 1
             ? word[word.length - 1] === "y"
                 ? word.substring(0, word.length - 1) + "ies"
@@ -2193,6 +2218,10 @@ export var Str;
         return n + (["st", "nd", "rd"][n - 1] || "th");
     }
     Str.order = order;
+    function capitalize(str) {
+        return str[0].toUpperCase() + str.substring(1);
+    }
+    Str.capitalize = capitalize;
     function semanticVersionLessThan(old, new_) {
         const os = old.split(".");
         const ns = new_.split(".");
