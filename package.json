@@ -1,9 +1,10 @@
 {
   "name": "@merrymake/utils",
-  "version": "10.0.1",
+  "version": "10.0.2",
   "description": "This is just a bag of nice little functions that we use often.",
   "type": "module",
   "main": "./index.js",
+  "typings": "./index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
